@@ -10,14 +10,20 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -32,18 +38,23 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
@@ -56,12 +67,47 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String DEV_NAME = "Shah Alam Laskar";
     private static final String DEV_EMAIL = "shahalamlaskar.official@gmail.com";
     private static final String DEV_GITHUB = "https://github.com/shahalamlaskarofficial";
+
+    // Persistent Static Turbo Download Engine (survives screen navigation & backgrounding)
+    private static final ExecutorService DOWNLOAD_EXECUTOR = Executors.newFixedThreadPool(4);
+    private static final List<TurboDownloadTask> TURBO_DOWNLOADS = new CopyOnWriteArrayList<>();
+
+    public static class TurboDownloadTask {
+        public static final int STATUS_DOWNLOADING = 0;
+        public static final int STATUS_PAUSED = 1;
+        public static final int STATUS_COMPLETED = 2;
+        public static final int STATUS_FAILED = 3;
+        public static final int STATUS_CANCELLED = 4;
+
+        public final String url;
+        public final String fileName;
+        public final File destFile;
+        public final boolean isSecureHttps;
+        public volatile long downloadedBytes = 0;
+        public volatile long totalBytes = -1;
+        public volatile long speedBytesPerSec = 0;
+        public volatile int status = STATUS_DOWNLOADING;
+        public volatile String errorMsg = "";
+
+        public TurboDownloadTask(String url, String fileName, File destFile) {
+            this.url = url;
+            this.fileName = fileName;
+            this.destFile = destFile;
+            this.isSecureHttps = url != null && url.toLowerCase(Locale.US).startsWith("https://");
+            if (destFile.exists()) {
+                this.downloadedBytes = destFile.length();
+            }
+        }
+    }
 
     private FrameLayout webContainer;
     private EditText etUrl, etFind;
@@ -94,6 +140,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final Set<String> blockedAdHosts = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Set<String> blockedTrackerHosts = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private static final String[] CORE_AD_DOMAINS = {
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
@@ -113,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
         "adsfs.oppomobile.com", "adx.ads.oppomobile.com", "ck.ads.oppomobile.com",
         "data.ads.oppomobile.com", "api.ad.xiaomi.com", "sdkconfig.ad.xiaomi.com",
         "sdkconfig.ad.intl.xiaomi.com", "iadsdk.apple.com", "api-adservices.apple.com",
-        "samsungads.com", "ad.samsungadhub.com", "ads. Yap.yahoo.com", "adsystem.com"
+        "samsungads.com", "ad.samsungadhub.com", "adsystem.com"
     };
 
     private static final String[] CORE_TRACKER_DOMAINS = {
@@ -229,7 +276,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnBookmarks.setOnClickListener(v -> showBookmarksDialog());
-        btnDownloads.setOnClickListener(v -> showDownloadsManager());
+        btnDownloads.setOnClickListener(v -> showTurboDownloadManager());
 
         etFind.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -263,11 +310,23 @@ public class MainActivity extends AppCompatActivity {
                     wv.goBack();
                 } else if (tabs.size() > 1) {
                     closeTab(currentTabIndex);
+                } else if (hasRunningDownloads()) {
+                    Toast.makeText(MainActivity.this,
+                            "⚡ Downloads running in background until completed or cancelled",
+                            Toast.LENGTH_LONG).show();
+                    moveTaskToBack(true);
                 } else {
                     finish();
                 }
             }
         });
+    }
+
+    private boolean hasRunningDownloads() {
+        for (TurboDownloadTask t : TURBO_DOWNLOADS) {
+            if (t.status == TurboDownloadTask.STATUS_DOWNLOADING) return true;
+        }
+        return false;
     }
 
     @Override
@@ -474,7 +533,7 @@ public class MainActivity extends AppCompatActivity {
             + ".dev-card a{color:#38BDF8;text-decoration:none;font-weight:bold;}"
             + "</style></head><body>"
             + "<div class='logo'>NOVA BROWSER</div>"
-            + "<div class='tag'>Shield v2.0 &bull; Battery Saver &bull; Low RAM (" + searchEngineName + ")</div>"
+            + "<div class='tag'>Shield v2.0 &bull; Turbo Downloader &bull; Low RAM (" + searchEngineName + ")</div>"
             + "<form class='search-box' onsubmit=\"window.location.href='" + searchEngineUrl + "'+encodeURIComponent(document.getElementById('q').value);return false;\">"
             + "<input id='q' type='text' placeholder='Search with " + searchEngineName + " or enter URL...'/>"
             + "<button type='submit'>GO</button></form>"
@@ -644,31 +703,512 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
-            String sizeMb = contentLength > 0
-                    ? String.format(Locale.US, "%.2f MB", contentLength / (1024.0 * 1024.0))
-                    : "Unknown size";
-
-            new AlertDialog.Builder(this)
-                .setTitle("NOVA Download Manager")
-                .setMessage("File: " + fileName + "\nSize: " + sizeMb + "\nType: " + mimeType)
-                .setPositiveButton("Download", (d, w) -> {
-                    DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-                    req.setMimeType(mimeType);
-                    req.setTitle(fileName);
-                    req.setDescription("Downloading via NOVA Browser");
-                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
-                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-                    if (dm != null) {
-                        dm.enqueue(req);
-                        Toast.makeText(this, "Downloading: " + fileName, Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+            String guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+            promptNewTurboDownload(url, guessedName, contentLength);
         });
     }
+
+    // =========================================================================
+    // NOVA TURBO DOWNLOAD ENGINE & VISUAL DASHBOARD
+    // =========================================================================
+
+    private File getSafeDownloadDirectory() {
+        File pubDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        if (pubDir != null && (pubDir.exists() || pubDir.mkdirs()) && pubDir.canWrite()) {
+            return pubDir;
+        }
+        File appDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (appDir != null && !appDir.exists()) {
+            appDir.mkdirs();
+        }
+        return appDir != null ? appDir : getFilesDir();
+    }
+
+    private void promptNewTurboDownload(String url, String suggestedName, long contentLength) {
+        boolean isHttps = url.toLowerCase(Locale.US).startsWith("https://");
+        String sizeText = contentLength > 0
+                ? formatBytes(contentLength)
+                : "Auto-detect on start";
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(48, 32, 48, 16);
+        box.setBackgroundColor(Color.parseColor("#0F172A"));
+
+        TextView tvSec = new TextView(this);
+        tvSec.setText(isHttps
+                ? "🔒 Security Check: Verified HTTPS Encrypted Stream"
+                : "⚠️ Security Warning: Unencrypted HTTP Link");
+        tvSec.setTextColor(Color.parseColor(isHttps ? "#4ADE80" : "#FACC15"));
+        tvSec.setTextSize(13f);
+        tvSec.setPadding(0, 0, 0, 12);
+        box.addView(tvSec);
+
+        TextView tvInfo = new TextView(this);
+        tvInfo.setText("Estimated Size: " + sizeText + "\nEngine: 64KB Buffered Turbo Stream (Resumable)");
+        tvInfo.setTextColor(Color.parseColor("#94A3B8"));
+        tvInfo.setTextSize(12f);
+        tvInfo.setPadding(0, 0, 0, 16);
+        box.addView(tvInfo);
+
+        EditText etName = new EditText(this);
+        etName.setText(suggestedName);
+        etName.setHint("File name...");
+        etName.setTextColor(Color.parseColor("#F8FAFC"));
+        etName.setHintTextColor(Color.parseColor("#64748B"));
+        etName.setBackgroundColor(Color.parseColor("#1E293B"));
+        etName.setPadding(24, 20, 24, 20);
+        etName.setSingleLine(true);
+        box.addView(etName);
+
+        new AlertDialog.Builder(this)
+            .setTitle("⚡ NOVA Turbo Downloader")
+            .setView(box)
+            .setPositiveButton("🚀 Turbo Download", (d, w) -> {
+                String finalName = etName.getText().toString().trim();
+                if (finalName.isEmpty()) finalName = "nova_file_" + System.currentTimeMillis();
+                startTurboDownload(url, finalName);
+                showTurboDownloadManager();
+            })
+            .setNeutralButton("System Downloader", (d, w) -> {
+                try {
+                    String finalName = etName.getText().toString().trim();
+                    DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+                    req.setTitle(finalName);
+                    req.setDescription("NOVA Browser Download");
+                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, finalName);
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) dm.enqueue(req);
+                    Toast.makeText(this, "Queued in System Downloader", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Fallback to Turbo Engine...", Toast.LENGTH_SHORT).show();
+                    startTurboDownload(url, suggestedName);
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void startTurboDownload(String url, String fileName) {
+        File dir = getSafeDownloadDirectory();
+        File target = new File(dir, fileName);
+        TurboDownloadTask task = new TurboDownloadTask(url, fileName, target);
+        TURBO_DOWNLOADS.add(0, task);
+        enqueueTurboTask(task);
+        Toast.makeText(this, "⚡ Turbo Download Started: " + fileName, Toast.LENGTH_SHORT).show();
+    }
+
+    private void enqueueTurboTask(TurboDownloadTask task) {
+        task.status = TurboDownloadTask.STATUS_DOWNLOADING;
+        DOWNLOAD_EXECUTOR.submit(() -> {
+            HttpURLConnection conn = null;
+            RandomAccessFile raf = null;
+            BufferedInputStream in = null;
+            try {
+                File target = task.destFile;
+                long existingBytes = target.exists() ? target.length() : 0;
+                task.downloadedBytes = existingBytes;
+
+                URL netUrl = new URL(task.url);
+                conn = (HttpURLConnection) netUrl.openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(20000);
+                conn.setInstanceFollowRedirects(true);
+                conn.setRequestProperty("User-Agent", defaultUserAgent != null ? defaultUserAgent : "Mozilla/5.0");
+                conn.setRequestProperty("Accept-Encoding", "identity");
+                conn.setRequestProperty("Connection", "keep-alive");
+
+                if (existingBytes > 0) {
+                    conn.setRequestProperty("Range", "bytes=" + existingBytes + "-");
+                }
+
+                int responseCode = conn.getResponseCode();
+                boolean isPartial = (responseCode == HttpURLConnection.HTTP_PARTIAL);
+
+                if (responseCode != HttpURLConnection.HTTP_OK && !isPartial) {
+                    task.status = TurboDownloadTask.STATUS_FAILED;
+                    task.errorMsg = "HTTP " + responseCode;
+                    return;
+                }
+
+                long contentLength = conn.getContentLengthLong();
+                if (isPartial) {
+                    task.totalBytes = existingBytes + contentLength;
+                } else {
+                    task.totalBytes = contentLength;
+                    existingBytes = 0;
+                    task.downloadedBytes = 0;
+                }
+
+                try {
+                    raf = new RandomAccessFile(target, "rw");
+                } catch (IOException permEx) {
+                    // Fallback to app external download directory if public directory restricts direct RAF
+                    File fallback = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), task.fileName);
+                    raf = new RandomAccessFile(fallback, "rw");
+                }
+
+                if (isPartial && existingBytes > 0) {
+                    raf.seek(existingBytes);
+                } else {
+                    raf.setLength(0);
+                }
+
+                // 64 KB High-Speed Direct Stream Buffer (Zero RAM Bloat)
+                in = new BufferedInputStream(conn.getInputStream(), 65536);
+                byte[] buffer = new byte[65536];
+                int bytesRead;
+
+                long lastTime = System.currentTimeMillis();
+                long bytesInWindow = 0;
+
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    if (task.status == TurboDownloadTask.STATUS_PAUSED) {
+                        task.speedBytesPerSec = 0;
+                        return;
+                    }
+                    if (task.status == TurboDownloadTask.STATUS_CANCELLED) {
+                        task.speedBytesPerSec = 0;
+                        try { raf.close(); } catch (Exception ignored) {}
+                        target.delete();
+                        return;
+                    }
+
+                    raf.write(buffer, 0, bytesRead);
+                    task.downloadedBytes += bytesRead;
+                    bytesInWindow += bytesRead;
+
+                    long now = System.currentTimeMillis();
+                    long elapsed = now - lastTime;
+                    if (elapsed >= 400) {
+                        task.speedBytesPerSec = (bytesInWindow * 1000L) / elapsed;
+                        bytesInWindow = 0;
+                        lastTime = now;
+                    }
+                }
+
+                task.speedBytesPerSec = 0;
+                task.status = TurboDownloadTask.STATUS_COMPLETED;
+                uiHandler.post(() -> Toast.makeText(MainActivity.this,
+                        "✅ Download Complete: " + task.fileName, Toast.LENGTH_SHORT).show());
+
+            } catch (Exception e) {
+                task.speedBytesPerSec = 0;
+                if (task.status != TurboDownloadTask.STATUS_PAUSED && task.status != TurboDownloadTask.STATUS_CANCELLED) {
+                    task.status = TurboDownloadTask.STATUS_FAILED;
+                    task.errorMsg = e.getMessage() != null ? e.getMessage() : "Network Interrupted";
+                }
+            } finally {
+                try { if (in != null) in.close(); } catch (Exception ignored) {}
+                try { if (raf != null) raf.close(); } catch (Exception ignored) {}
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 0) return "Unknown";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format(Locale.US, "%.1f KB", bytes / 1024.0);
+        return String.format(Locale.US, "%.2f MB", bytes / (1024.0 * 1024.0));
+    }
+
+    private void showTurboDownloadManager() {
+        ScrollView scrollRoot = new ScrollView(this);
+        scrollRoot.setBackgroundColor(Color.parseColor("#0B0F19"));
+
+        LinearLayout mainContainer = new LinearLayout(this);
+        mainContainer.setOrientation(LinearLayout.VERTICAL);
+        mainContainer.setPadding(32, 28, 32, 32);
+        scrollRoot.addView(mainContainer);
+
+        // 1. Header Banner
+        File dlDir = getSafeDownloadDirectory();
+        long freeSpaceMb = dlDir.getFreeSpace() / (1024 * 1024);
+        TextView tvSubHeader = new TextView(this);
+        tvSubHeader.setText("🚀 64KB Multi-Thread Engine • Persistent Background Mode\n💾 Free Storage: " + freeSpaceMb + " MB • Path: " + dlDir.getName());
+        tvSubHeader.setTextColor(Color.parseColor("#38BDF8"));
+        tvSubHeader.setTextSize(12f);
+        tvSubHeader.setPadding(0, 0, 0, 24);
+        mainContainer.addView(tvSubHeader);
+
+        // 2. Direct Link Paste & Download Card
+        LinearLayout linkCard = new LinearLayout(this);
+        linkCard.setOrientation(LinearLayout.VERTICAL);
+        linkCard.setBackgroundColor(Color.parseColor("#1E293B"));
+        linkCard.setPadding(28, 24, 28, 24);
+
+        TextView tvLinkTitle = new TextView(this);
+        tvLinkTitle.setText("🔗 Direct Link Downloader (Paste Any File URL)");
+        tvLinkTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvLinkTitle.setTypeface(null, Typeface.BOLD);
+        tvLinkTitle.setTextSize(14f);
+        linkCard.addView(tvLinkTitle);
+
+        EditText etDirectUrl = new EditText(this);
+        etDirectUrl.setHint("https://example.com/file.apk or .mp4 / .zip...");
+        etDirectUrl.setTextColor(Color.parseColor("#F8FAFC"));
+        etDirectUrl.setHintTextColor(Color.parseColor("#94A3B8"));
+        etDirectUrl.setBackgroundColor(Color.parseColor("#0F172A"));
+        etDirectUrl.setPadding(20, 18, 20, 18);
+        etDirectUrl.setSingleLine(true);
+        etDirectUrl.setTextSize(13f);
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        etLp.setMargins(0, 16, 0, 16);
+        linkCard.addView(etDirectUrl, etLp);
+
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnPaste = new Button(this);
+        btnPaste.setText("📋 Paste Clipboard");
+        btnPaste.setTextSize(12f);
+        btnPaste.setBackgroundColor(Color.parseColor("#334155"));
+        btnPaste.setTextColor(Color.parseColor("#F8FAFC"));
+        LinearLayout.LayoutParams pasteLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        pasteLp.setMargins(0, 0, 12, 0);
+        btnRow.addView(btnPaste, pasteLp);
+
+        Button btnDirectGo = new Button(this);
+        btnDirectGo.setText("⚡ Start Download");
+        btnDirectGo.setTextSize(12f);
+        btnDirectGo.setBackgroundColor(Color.parseColor("#0284C7"));
+        btnDirectGo.setTextColor(Color.parseColor("#FFFFFF"));
+        LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnRow.addView(btnDirectGo, goLp);
+
+        linkCard.addView(btnRow);
+        mainContainer.addView(linkCard);
+
+        btnPaste.setOnClickListener(v -> {
+            ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cb != null && cb.hasPrimaryClip() && cb.getPrimaryClip() != null && cb.getPrimaryClip().getItemCount() > 0) {
+                CharSequence clip = cb.getPrimaryClip().getItemAt(0).getText();
+                if (clip != null) {
+                    etDirectUrl.setText(clip.toString().trim());
+                    Toast.makeText(this, "Link Pasted!", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Clipboard is empty", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // 3. Category Filter Bar for Saved Files
+        TextView tvCatHeader = new TextView(this);
+        tvCatHeader.setText("📂 Browse Saved Files by Category");
+        tvCatHeader.setTextColor(Color.parseColor("#94A3B8"));
+        tvCatHeader.setTextSize(12f);
+        tvCatHeader.setPadding(0, 24, 0, 12);
+        mainContainer.addView(tvCatHeader);
+
+        HorizontalScrollView catScroll = new HorizontalScrollView(this);
+        LinearLayout catRow = new LinearLayout(this);
+        catRow.setOrientation(LinearLayout.HORIZONTAL);
+        String[] catNames = {"📂 All", "🤖 APKs", "🎬 Videos", "🖼️ Images", "📄 Docs", "📦 ZIPs"};
+        String[][] catExts = {
+            {},
+            {".apk"},
+            {".mp4", ".mkv", ".webm", ".avi"},
+            {".jpg", ".jpeg", ".png", ".webp", ".gif"},
+            {".pdf", ".doc", ".docx", ".txt", ".xlsx"},
+            {".zip", ".rar", ".7z", ".tar", ".gz"}
+        };
+        for (int i = 0; i < catNames.length; i++) {
+            final int idx = i;
+            Button chip = new Button(this);
+            chip.setText(catNames[i]);
+            chip.setTextSize(11f);
+            chip.setBackgroundColor(Color.parseColor("#1E293B"));
+            chip.setTextColor(Color.parseColor("#38BDF8"));
+            LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            chipLp.setMargins(0, 0, 12, 0);
+            chip.setOnClickListener(v -> showFilteredFiles(catNames[idx], catExts[idx]));
+            catRow.addView(chip, chipLp);
+        }
+        catScroll.addView(catRow);
+        mainContainer.addView(catScroll);
+
+        // 4. Live Active & Recent Queue Container
+        TextView tvQueueTitle = new TextView(this);
+        tvQueueTitle.setText("⚡ Active & Recent Turbo Queue");
+        tvQueueTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvQueueTitle.setTypeface(null, Typeface.BOLD);
+        tvQueueTitle.setTextSize(14f);
+        tvQueueTitle.setPadding(0, 28, 0, 12);
+        mainContainer.addView(tvQueueTitle);
+
+        LinearLayout queueListLayout = new LinearLayout(this);
+        queueListLayout.setOrientation(LinearLayout.VERTICAL);
+        mainContainer.addView(queueListLayout);
+
+        btnDirectGo.setOnClickListener(v -> {
+            String rawUrl = etDirectUrl.getText().toString().trim();
+            if (rawUrl.isEmpty()) {
+                Toast.makeText(this, "Paste or type a valid file URL first", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+                rawUrl = "https://" + rawUrl;
+            }
+            String guessed = URLUtil.guessFileName(rawUrl, null, null);
+            startTurboDownload(rawUrl, guessed);
+            etDirectUrl.setText("");
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("⚡ NOVA Turbo Download Manager")
+            .setView(scrollRoot)
+            .setNeutralButton("Clear Finished", (d, w) -> {
+                TURBO_DOWNLOADS.removeIf(t -> t.status == TurboDownloadTask.STATUS_COMPLETED
+                        || t.status == TurboDownloadTask.STATUS_CANCELLED
+                        || t.status == TurboDownloadTask.STATUS_FAILED);
+            })
+            .setNegativeButton("Minimize (Keep Running)", null)
+            .create();
+
+        // Live 500ms UI Refresher while Download Manager is visible
+        Runnable liveUpdater = new Runnable() {
+            @Override
+            public void run() {
+                if (!dialog.isShowing()) return;
+                renderTurboQueueCards(queueListLayout);
+                uiHandler.postDelayed(this, 500);
+            }
+        };
+
+        dialog.setOnShowListener(d -> uiHandler.post(liveUpdater));
+        dialog.show();
+    }
+
+    private void renderTurboQueueCards(LinearLayout queueListLayout) {
+        queueListLayout.removeAllViews();
+
+        if (TURBO_DOWNLOADS.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("No active downloads right now.\nPaste a direct URL above or tap any download link on a webpage!");
+            tvEmpty.setTextColor(Color.parseColor("#64748B"));
+            tvEmpty.setTextSize(13f);
+            tvEmpty.setPadding(12, 20, 12, 20);
+            queueListLayout.addView(tvEmpty);
+            return;
+        }
+
+        for (TurboDownloadTask task : TURBO_DOWNLOADS) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackgroundColor(Color.parseColor("#1E293B"));
+            card.setPadding(24, 20, 24, 20);
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, 18);
+
+            // Title + Security Badge
+            TextView tvName = new TextView(this);
+            String badge = task.isSecureHttps ? "🔒 " : "⚠️ ";
+            tvName.setText(badge + task.fileName);
+            tvName.setTextColor(Color.parseColor("#F8FAFC"));
+            tvName.setTypeface(null, Typeface.BOLD);
+            tvName.setTextSize(13f);
+            tvName.setSingleLine(true);
+            tvName.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+            card.addView(tvName);
+
+            // Progress Bar
+            ProgressBar pb = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            pb.setMax(100);
+            int pct = (task.totalBytes > 0) ? (int) ((task.downloadedBytes * 100L) / task.totalBytes) : 0;
+            if (task.status == TurboDownloadTask.STATUS_COMPLETED) pct = 100;
+            pb.setProgress(Math.min(100, Math.max(0, pct)));
+            LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pbLp.setMargins(0, 12, 0, 8);
+            card.addView(pb, pbLp);
+
+            // Live Speed, Size & ETA Status Line
+            TextView tvStatus = new TextView(this);
+            tvStatus.setTextSize(11f);
+            String sizeRatio = formatBytes(task.downloadedBytes) + " / " + formatBytes(task.totalBytes);
+
+            if (task.status == TurboDownloadTask.STATUS_DOWNLOADING) {
+                String speedStr = formatBytes(task.speedBytesPerSec) + "/s";
+                String etaStr = "";
+                if (task.speedBytesPerSec > 0 && task.totalBytes > task.downloadedBytes) {
+                    long remSec = (task.totalBytes - task.downloadedBytes) / task.speedBytesPerSec;
+                    etaStr = " • ETA: " + remSec + "s";
+                }
+                tvStatus.setText("🚀 " + pct + "% • " + sizeRatio + " • " + speedStr + etaStr);
+                tvStatus.setTextColor(Color.parseColor("#38BDF8"));
+            } else if (task.status == TurboDownloadTask.STATUS_PAUSED) {
+                tvStatus.setText("⏸️ PAUSED at " + pct + "% • " + sizeRatio);
+                tvStatus.setTextColor(Color.parseColor("#FACC15"));
+            } else if (task.status == TurboDownloadTask.STATUS_COMPLETED) {
+                tvStatus.setText("✅ COMPLETED • " + formatBytes(task.downloadedBytes) + " • Saved to Downloads");
+                tvStatus.setTextColor(Color.parseColor("#4ADE80"));
+            } else if (task.status == TurboDownloadTask.STATUS_CANCELLED) {
+                tvStatus.setText("❌ CANCELLED");
+                tvStatus.setTextColor(Color.parseColor("#EF4444"));
+            } else {
+                tvStatus.setText("⚠️ FAILED (" + task.errorMsg + ") • Tap Resume to retry");
+                tvStatus.setTextColor(Color.parseColor("#F87171"));
+            }
+            card.addView(tvStatus);
+
+            // Control Buttons Row (Pause / Resume / Cancel / Open)
+            LinearLayout ctrlRow = new LinearLayout(this);
+            ctrlRow.setOrientation(LinearLayout.HORIZONTAL);
+            ctrlRow.setGravity(Gravity.END);
+            ctrlRow.setPadding(0, 10, 0, 0);
+
+            if (task.status == TurboDownloadTask.STATUS_DOWNLOADING) {
+                Button btnPause = createSmallActionButton("⏸️ Pause", "#334155", "#FACC15");
+                btnPause.setOnClickListener(v -> task.status = TurboDownloadTask.STATUS_PAUSED);
+                ctrlRow.addView(btnPause);
+            } else if (task.status == TurboDownloadTask.STATUS_PAUSED || task.status == TurboDownloadTask.STATUS_FAILED) {
+                Button btnResume = createSmallActionButton("▶️ Resume", "#0284C7", "#FFFFFF");
+                btnResume.setOnClickListener(v -> enqueueTurboTask(task));
+                ctrlRow.addView(btnResume);
+            }
+
+            if (task.status != TurboDownloadTask.STATUS_COMPLETED && task.status != TurboDownloadTask.STATUS_CANCELLED) {
+                Button btnCancel = createSmallActionButton("✕ Cancel", "#334155", "#EF4444");
+                btnCancel.setOnClickListener(v -> {
+                    task.status = TurboDownloadTask.STATUS_CANCELLED;
+                    if (task.destFile.exists()) task.destFile.delete();
+                });
+                ctrlRow.addView(btnCancel);
+            }
+
+            if (task.status == TurboDownloadTask.STATUS_COMPLETED) {
+                Button btnOpen = createSmallActionButton("📂 Open Folder", "#065F46", "#4ADE80");
+                btnOpen.setOnClickListener(v -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)));
+                ctrlRow.addView(btnOpen);
+            }
+
+            card.addView(ctrlRow);
+            queueListLayout.addView(card, cardLp);
+        }
+    }
+
+    private Button createSmallActionButton(String text, String bgColor, String textColor) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setTextSize(11f);
+        b.setBackgroundColor(Color.parseColor(bgColor));
+        b.setTextColor(Color.parseColor(textColor));
+        b.setPadding(20, 8, 20, 8);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(12, 0, 0, 0);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    // =========================================================================
+    // BROWSER NAVIGATION, PRIVACY DASHBOARD & TOOLS
+    // =========================================================================
 
     private void loadUserInput(String input) {
         if (input.isEmpty()) return;
@@ -769,11 +1309,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void showAboutDeveloperDialog() {
         String aboutMessage = "🌐 NOVA Browser — Advanced Privacy Edition\n"
-                + "Version: 2.0.0 (Shield v2 + Low-RAM Engine)\n\n"
+                + "Version: 2.1.0 (Shield v2 + Turbo Download Engine)\n\n"
                 + "👨‍💻 Developer: " + DEV_NAME + "\n"
                 + "📧 Email: " + DEV_EMAIL + "\n"
                 + "💻 GitHub: @shahalamlaskarofficial\n\n"
-                + "Built for ultra-fast browsing, aggressive ad & tracker protection, intelligent tab suspension, and low battery consumption.";
+                + "Built for ultra-fast browsing, aggressive ad & tracker protection, persistent multi-threaded downloads, and low battery consumption.";
 
         new AlertDialog.Builder(this)
             .setTitle("About & Contact Developer")
@@ -835,6 +1375,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMainMenu() {
         String[] options = {
+            "⬇ NOVA Turbo Download Manager",
             "⚡ RAM & Battery Optimizer (" + getRamUsageMb() + ")",
             "🔍 Search Engine (" + searchEngineName + ")",
             "📖 Reader Mode (Distraction-Free)",
@@ -857,33 +1398,34 @@ public class MainActivity extends AppCompatActivity {
             .setItems(options, (d, which) -> {
                 WebView wv = getCurrentWebView();
                 switch (which) {
-                    case 0: showPerformanceOptimizerDialog(); break;
-                    case 1: showSearchEngineDialog(); break;
-                    case 2: toggleReaderMode(wv); break;
-                    case 3:
+                    case 0: showTurboDownloadManager(); break;
+                    case 1: showPerformanceOptimizerDialog(); break;
+                    case 2: showSearchEngineDialog(); break;
+                    case 3: toggleReaderMode(wv); break;
+                    case 4:
                         layoutFind.setVisibility(View.VISIBLE);
                         etFind.requestFocus();
                         break;
-                    case 4: toggleDesktopMode(); break;
-                    case 5: toggleIncognitoMode(); break;
-                    case 6:
+                    case 5: toggleDesktopMode(); break;
+                    case 6: toggleIncognitoMode(); break;
+                    case 7:
                         isDataSaver = !isDataSaver;
                         for (WebView tab : tabs) tab.getSettings().setBlockNetworkImage(isDataSaver);
                         if (wv != null) wv.reload();
                         Toast.makeText(this, "Data Saver " + (isDataSaver ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
                         break;
-                    case 7: toggleTheme(); break;
-                    case 8: showZoomDialog(); break;
-                    case 9: toggleFullScreen(); break;
-                    case 10:
+                    case 8: toggleTheme(); break;
+                    case 9: showZoomDialog(); break;
+                    case 10: toggleFullScreen(); break;
+                    case 11:
                         if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
                             wv.loadUrl("https://translate.google.com/translate?sl=auto&tl=en&u=" + Uri.encode(wv.getUrl()));
                         }
                         break;
-                    case 11: showHistoryDialog(); break;
-                    case 12: shareOrCopyUrl(wv); break;
-                    case 13: clearBrowserData(wv); break;
-                    case 14: showAboutDeveloperDialog(); break;
+                    case 12: showHistoryDialog(); break;
+                    case 13: shareOrCopyUrl(wv); break;
+                    case 14: clearBrowserData(wv); break;
+                    case 15: showAboutDeveloperDialog(); break;
                 }
             })
             .show();
@@ -1060,52 +1602,33 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
-    private void showDownloadsManager() {
-        String[] categories = {
-            "📂 All Downloaded Files",
-            "🤖 APK Packages (.apk)",
-            "🎬 Videos (.mp4, .mkv, .webm)",
-            "🖼️ Images (.jpg, .png, .webp)",
-            "📄 Documents (.pdf, .docx, .txt)",
-            "📦 Archives (.zip, .rar, .7z)"
-        };
-        String[][] exts = {
-            {},
-            {".apk"},
-            {".mp4", ".mkv", ".webm", ".avi"},
-            {".jpg", ".jpeg", ".png", ".webp", ".gif"},
-            {".pdf", ".doc", ".docx", ".txt", ".xlsx"},
-            {".zip", ".rar", ".7z", ".tar", ".gz"}
-        };
-
-        new AlertDialog.Builder(this)
-            .setTitle("NOVA Download & File Manager")
-            .setItems(categories, (d, which) -> showFilteredFiles(categories[which], exts[which]))
-            .setNegativeButton("Close", null)
-            .show();
-    }
-
     private void showFilteredFiles(String title, String[] extensions) {
-        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        File[] files = dir.listFiles();
+        List<File> dirsToScan = new ArrayList<>();
+        File pubDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        if (pubDir != null) dirsToScan.add(pubDir);
+        File appDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (appDir != null && !appDir.equals(pubDir)) dirsToScan.add(appDir);
+
         List<File> matched = new ArrayList<>();
         List<String> labels = new ArrayList<>();
 
-        if (files != null) {
-            for (File f : files) {
-                if (f.isFile()) {
-                    String name = f.getName().toLowerCase(Locale.US);
-                    boolean ok = extensions.length == 0;
-                    for (String ext : extensions) {
-                        if (name.endsWith(ext)) {
-                            ok = true;
-                            break;
+        for (File dir : dirsToScan) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    if (f.isFile()) {
+                        String name = f.getName().toLowerCase(Locale.US);
+                        boolean ok = extensions.length == 0;
+                        for (String ext : extensions) {
+                            if (name.endsWith(ext)) {
+                                ok = true;
+                                break;
+                            }
                         }
-                    }
-                    if (ok) {
-                        matched.add(f);
-                        String size = String.format(Locale.US, "%.2f MB", f.length() / (1024.0 * 1024.0));
-                        labels.add(f.getName() + " (" + size + ")");
+                        if (ok) {
+                            matched.add(f);
+                            labels.add(f.getName() + " (" + formatBytes(f.length()) + ")");
+                        }
                     }
                 }
             }
@@ -1122,7 +1645,7 @@ public class MainActivity extends AppCompatActivity {
                 File selected = matched.get(which);
                 new AlertDialog.Builder(this)
                     .setTitle(selected.getName())
-                    .setMessage("Path: " + selected.getAbsolutePath())
+                    .setMessage("Size: " + formatBytes(selected.length()) + "\nPath: " + selected.getAbsolutePath())
                     .setPositiveButton("Open Downloads Folder", (d2, w2) -> {
                         startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
                     })
