@@ -21,16 +21,30 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        with:
+          gradle-version: '8.7'
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          PROJECT_FILE=$(find . -maxdepth 3 \( -name "settings.gradle*" -o -name "gradlew" \) | head -n 1)
+          if [ -z "$PROJECT_FILE" ]; then
+            PROJECT_FILE=$(find . -maxdepth 2 -name "build.gradle*" | awk '{print length, $0}' | sort -n | head -n 1 | cut -d" " -f2-)
+          fi
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "Error: No Gradle build files found in repository. Repository contents:"
+            ls -la
+            exit 1
+          fi
+          cd "$(dirname "$PROJECT_FILE")"
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Nova-Browser-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
-
+          path: "**/build/outputs/apk/debug/*.apk"
