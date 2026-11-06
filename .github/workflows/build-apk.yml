@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,25 +29,19 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          PROJECT_FILE=$(find . -maxdepth 3 \( -name "settings.gradle*" -o -name "gradlew" \) | head -n 1)
-          if [ -z "$PROJECT_FILE" ]; then
-            PROJECT_FILE=$(find . -maxdepth 2 -name "build.gradle*" | awk '{print length, $0}' | sort -n | head -n 1 | cut -d" " -f2-)
-          fi
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "Error: No Gradle build files found in repository. Repository contents:"
-            ls -la
-            exit 1
-          fi
-          cd "$(dirname "$PROJECT_FILE")"
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+          gradle assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NOVA-Browser-v3.0.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Nova-Browser-Debug-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/debug/NOVA-Browser-v3.0.apk
+
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v3.0.${{ github.run_number }}
+          name: "NOVA Browser v3.0 (Build #${{ github.run_number }})"
+          body: "Automated build of NOVA Browser v3.0 by Shah Alam Laskar. Tap NOVA-Browser-v3.0.apk below under Assets to download directly."
+          files: app/build/outputs/apk/debug/NOVA-Browser-v3.0.apk
