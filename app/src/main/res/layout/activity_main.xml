@@ -6,11 +6,10 @@
     android:orientation="vertical"
     android:background="#0B0F19">
 
-    <!-- Top Address & Security Bar -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="54dp"
+        android:layout_height="56dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingStart="6dp"
@@ -18,22 +17,21 @@
         android:background="#111827">
 
         <Button
-            android:id="@+id/btnSecurity"
+            android:id="@+id/btnShield"
             style="?android:attr/borderlessButtonStyle"
-            android:layout_width="38dp"
+            android:layout_width="42dp"
             android:layout_height="40dp"
             android:text="🛡️"
-            android:textSize="14sp"
-            android:padding="0dp"
-            android:textColor="#38BDF8" />
+            android:textSize="16sp"
+            android:padding="0dp" />
 
         <EditText
             android:id="@+id/etUrl"
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:background="#1E293B"
-            android:hint="Search or enter address..."
+            android:hint="Search NOVA or enter URL..."
             android:textColor="#F8FAFC"
             android:textColorHint="#94A3B8"
             android:paddingStart="12dp"
@@ -41,4 +39,155 @@
             android:singleLine="true"
             android:imeOptions="actionGo"
             android:inputType="textUri"
-            android:textSize
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnTabs"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="44dp"
+            android:layout_height="40dp"
+            android:text="[1]"
+            android:textColor="#38BDF8"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:padding="0dp" />
+
+        <Button
+            android:id="@+id/btnMenu"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:text="⋮"
+            android:textColor="#F8FAFC"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:padding="0dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutFind"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:background="#1E293B"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/etFind"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:hint="Find in page..."
+            android:textColor="#F8FAFC"
+            android:textColorHint="#94A3B8"
+            android:background="#0F172A"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:singleLine="true"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnFindNext"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="60dp"
+            android:layout_height="36dp"
+            android:text="Next"
+            android:textColor="#38BDF8"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnFindClose"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="44dp"
+            android:layout_height="36dp"
+            android:text="✕"
+            android:textColor="#EF4444"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:max="100"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:id="@+id/webContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="#111827"
+        android:weightSum="6">
+
+        <Button
+            android:id="@+id/btnBack"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="◀"
+            android:textColor="#F8FAFC" />
+
+        <Button
+            android:id="@+id/btnForward"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="▶"
+            android:textColor="#F8FAFC" />
+
+        <Button
+            android:id="@+id/btnReload"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="↻"
+            android:textColor="#F8FAFC"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnHome"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="⌂"
+            android:textColor="#38BDF8"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/btnBookmarks"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="★"
+            android:textColor="#FACC15"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnDownloads"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="⬇"
+            android:textColor="#F8FAFC"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+</LinearLayout>
