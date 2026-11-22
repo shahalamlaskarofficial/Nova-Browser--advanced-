@@ -1,49 +1,87 @@
-# 🌐 NOVA Browser – Advanced Privacy, Turbo Download & Low-RAM Android Browser
+# 🌐 NOVA Browser v4.0 — Liquid Glass Edition
 
-**NOVA Browser** is a next-generation, ultra-lightweight Android web browser engineered by **Shah Alam Laskar**. It combines **NOVA Shield v2** (a dual-layer Ad & Tracker Blocker), **NOVA Turbo Download Engine** (persistent multi-threaded downloader with direct link pasting), and **Intelligent Tab Suspension** for minimal RAM and battery consumption.
-
----
-
-## ⚙️ How the App Works (Under-the-Hood Architecture)
-
-### 1. 🛡️ How NOVA Shield v2 Blocks Ads & Trackers (Dual-Layer Engine)
-Unlike basic browsers that only hide banners visually, NOVA Browser intercepts unwanted traffic at two independent layers before it can load:
-* **Layer 1 — Network Stream Interception (`shouldInterceptRequest`):** Every sub-resource request (scripts, images, iframes, tracking pixels) is checked against an in-memory `ConcurrentHashMap` containing core EasyList/EasyPrivacy domains, OEM telemetry servers, and 3,500+ dynamically synced ad servers. Using $O(1)$ parent-domain hash walking, matched requests are immediately aborted at the stream level by throwing an `IOException`, saving bandwidth and CPU.
-* **Layer 2 — Runtime JavaScript & Fetch/XHR Firewall:** At `onPageStarted`, NOVA injects a lightweight JavaScript security hook (`injectNovaShieldHook`) that wraps `window.fetch` and `XMLHttpRequest.prototype.open/send`. Any script attempting to ping analytics or ad endpoints is rejected with a network error, while cosmetic CSS rules strip empty ad containers and cookie consent overlays.
-
-### 2. 🚀 How the NOVA Turbo Download Manager Works
-* **64 KB Buffered Direct-to-Disk Streaming:** Downloads run on a dedicated 4-thread `ExecutorService` (`DOWNLOAD_EXECUTOR`). Instead of buffering entire files in RAM, NOVA streams bytes through a `64 KB` (`65,536` bytes) `BufferedInputStream` directly into a `RandomAccessFile` on disk, achieving maximum network throughput with near-zero memory overhead.
-* **Pause & Resume via HTTP `Range` Headers:** When you pause a download and tap **Resume**, NOVA inspects the existing byte length on disk and sends an `Range: bytes=<downloaded>-` HTTP header, resuming from the exact byte where it left off.
-* **Direct Link Paste Downloader:** Users can copy any file URL, tap **📋 Paste Clipboard** inside the Download Manager, and start a high-speed download directly without opening a webpage.
-* **Background Persistence:** The download queue is managed statically at the process level. If you press the Android **Back** button while a download is running, NOVA automatically calls `moveTaskToBack(true)` instead of terminating the activity—keeping your downloads running at full speed in the background until completed or explicitly cancelled.
-
-### 3. ⚡ How RAM & Battery Optimization Works
-* **Intelligent Tab Suspension (`RENDERER_PRIORITY_WAIVED`):** When you switch from Tab A to Tab B, NOVA calls `onPause()` on all background `WebView` instances and sets Android's `RENDERER_PRIORITY_WAIVED` policy. This freezes background JavaScript execution and allows the Android OS to reclaim background renderer memory automatically.
-* **Zero Background Battery Drain:** When the user minimizes the app, `onPause()` halts active timers (`pauseTimers()`), stopping background animations and CPU wakeups.
-* **Automatic Low-Memory Recovery (`onTrimMemory`):** When Android signals low system RAM, NOVA automatically purges non-essential cache from inactive tabs and triggers garbage collection (`System.gc()`).
+**NOVA Browser** is an ultra-lightweight, privacy-first Android web browser engineered for **speed, aggressive ad blocking, persistent 4x parallel downloads, and ultra-low RAM usage (≤ 15–18 MB)**. Designed with a dynamic **Liquid Glass UI**, built-in **3-Engine Temp Mail**, and **Login Wall Bypass**, NOVA gives you a clean, distraction-free mobile web experience.
 
 ---
 
-## ✨ Complete Feature Highlights
+## ✨ Key Features
 
-* **🧭 Smart Browsing:** Multi-tab visual switcher (`🟢` Active / `💤` Suspended), Recently Closed Tabs recovery, Google/Brave/Bing/Startpage/DuckDuckGo engine switcher, Distraction-Free Reader Mode, Find-in-Page, Page Translation, and QR Code Generator.
-* **⬇ Turbo Download & File Manager:** Live speed (`MB/s`), progress bar, `ETA`, Pause/Resume/Cancel controls, Direct URL Paste Downloader, HTTPS security check, and built-in category filters (`APKs`, `Videos`, `Images`, `Documents`, `Archives`).
-* **🛡️ Privacy & Security:** HTTPS-First automatic upgrades, Third-Party Cookie Blocking, Private/Incognito Mode, Per-Site Allowlist, and a live Privacy & Shield Dashboard.
+### 🎨 Dynamic Liquid Glass UI & Customization
+* **Fluid Adaptive Bars:** Floating translucent top and bottom glass bars start comfortably sized (`56dp`) on the Home screen, smoothly animate down (`44dp`) when you enter a website, and glide away while scrolling for maximum screen space.
+* **Liquid Glass Box Menu:** Clean, categorized frosted-glass dashboard for instant access to all tools.
+* **6 Vibrant Neon-Glass Themes:** Switch anytime between **Electric Sapphire**, **AMOLED Neon (Pure Black)**, **Neon Cyberpunk**, **Solar Sunset**, **Cyber Emerald**, and **Crystal Frost**.
+* **Custom Gallery Wallpapers:** Pick any image from your phone gallery to glow behind the frosted Liquid Glass Home screen.
+
+### 🛡️ NOVA Shield v5 (Ad, Tracker, YouTube & Spotify Blocker)
+* **175,000+ Domain Blocklist:** Automatically syncs and caches 4 major filter lists (*StevenBlack Hosts*, *HaGeZi Multi-Light*, *AdAway*, and *Peter Lowe's AdServers*).
+* **YouTube & Spotify Ad Protection:** Strips `adPlacements`/`playerAds` from YouTube player JSON payloads, auto-skips video ads, blocks Spotify web ad/telemetry endpoints, and enables DRM protected media playback for Spotify Web Player (in Desktop Mode).
+* **Interstitial & 18+ Pop-Up Killer:** Real-time DOM `MutationObserver` destroys full-screen ad overlays, pop-unders, and scroll locks automatically.
+* **Organized Shield Dashboard:** Live stats for Ads Blocked, Trackers Blocked, Data Saved, per-site Trust/Allowlist, and one-tap list updates.
+
+### 🚀 NOVA 4x Turbo Download Manager
+* **4-Chunk Parallel 128 KB Streaming:** Splits supported files into 4 concurrent byte-range segments for up to 4x faster download speeds.
+* **Persistent Foreground Service:** Runs inside a dedicated Android Foreground Service (`DownloadService`) with a live progress notification bar and CPU WakeLock—**downloads never stop** when you press Back or switch apps until completed or cancelled.
+* **Direct Link Paste & Download:** Paste any direct file URL (`.apk`, `.mp4`, `.zip`, `.pdf`) right inside the Download Manager to start downloading immediately.
+* **Pause, Resume & Public Storage Export:** Bug-free multi-segment Pause/Resume via HTTP `Range` headers, with automatic `MediaStore.Downloads` export directly into **`Downloads/NOVA Browser/`** so every file appears immediately in your phone's file manager.
+
+### 📧 Built-In 3-Engine NOVA Temp Mail
+* **Unique Disposable Email for Every User:** Generates a fresh, private email address on demand with automatic 3-server failover (**Guerrilla Mail → Mail.gw → Mail.tm**).
+* **Live Inbox & OTP Reader:** Copy your address in one tap, refresh your inbox inside the app, and read verification emails or OTP codes without leaving the page.
+
+### 🔓 Smart Browsing Tools
+* **Login & Sign-Up Wall Bypass:** Strip mandatory login popups, blurred paywall overlays, and scroll locks—or reload stubborn pages using Search Crawler UA / Reader Mode.
+* **Visual Multi-Tab Switcher:** Shows active (`🟢`) and suspended (`💤`) tabs, plus Recently Closed Tabs recovery.
+* **Essentials Built In:** Search Engine Switcher (Google, Brave, Bing, Startpage, DuckDuckGo), Private/Incognito Mode, Desktop Site, Find-in-Page, Reader Mode, Page Translation, Font Zoom (75%–150%), QR Code Generator, Bookmarks, and History.
 
 ---
 
-## 📦 How to Download & Install the APK
-Every commit to `main` automatically builds a fresh APK using GitHub Actions:
-1. Click the **Actions** tab at the top of this repository.
-2. Open the latest workflow run with a green checkmark (**✓**).
-3. Scroll down to **Artifacts**, download **`Nova-Browser-Debug-APK`**, extract the `.zip`, and install `app-debug.apk`.
+## ⚙️ How NOVA Browser Works (Under-the-Hood Architecture)
+
+### 1. 🧠 How It Blocks 175,000+ Domains Using Only ~1.4 MB of RAM
+Standard Android ad blockers store domains in `HashSet<String>` or `HashMap` objects, which easily consumes 20–30 MB of Java heap memory. NOVA Browser uses a **primitive sorted `long[]` 64-bit FNV-1a hash engine**:
+* Each domain is hashed into a single 8-byte primitive `long` and sorted in memory (`175,000 × 8 bytes ≈ 1.4 MB` with zero per-object overhead).
+* Every sub-resource request in `shouldInterceptRequest` walks parent domains using fast `O(log n)` binary search (`Arrays.binarySearch`). Matched ad/tracker streams are immediately aborted with an `IOException` before a single byte downloads.
+* A synchronous `@JavascriptInterface` (`NovaShieldBridge`) connects `window.fetch` and `XMLHttpRequest` directly to the native hash engine so script-based probes are blocked against the full 175,000+ database.
+
+### 2. ⚡ How the 4x Foreground Download Engine Works
+* When a download starts, `DownloadService` sends an HTTP `HEAD` probe to check `Content-Length` and `Accept-Ranges: bytes`.
+* For supported files ≥ 2 MB, NOVA divides the file into 4 byte ranges and downloads all 4 segments concurrently through `128 KB` `BufferedInputStream` buffers directly into a `RandomAccessFile` staging file, tracking exact per-chunk bytes written so Pause/Resume never corrupts data.
+* On completion, the file is atomically streamed into Android's `MediaStore.Downloads` (`Downloads/NOVA Browser/`) and the staging file is deleted.
+
+### 3. 🔋 How Battery & Low-RAM Optimization Works
+* **Intelligent Tab Suspension:** Switching tabs immediately calls `onPause()` and sets `WebView.RENDERER_PRIORITY_WAIVED` on all background tabs so inactive pages use zero CPU and release renderer memory.
+* **Zero Background Drain:** Minimizing the app pauses WebView timers (`pauseTimers()`).
+* **Automatic Memory Guard:** `enforceLowRamBudget()` and `onTrimMemory()` automatically flush inactive tab caches whenever heap usage approaches 15 MB.
 
 ---
 
-## 👨‍💻 About & Contact Developer
+## 📦 Download, Install & Seamless Updates
 
-* **Developer:** Shah Alam Laskar
-* **Email:** [shahalamlaskar.official@gmail.com](mailto:shahalamlaskar.official@gmail.com)
-* **GitHub:** [@shahalamlaskarofficial](https://github.com/shahalamlaskarofficial)
+Every push to `main` automatically compiles and publishes **`NOVA-Browser-v4.0.apk`** via GitHub Actions with a **persistent signing keystore** and **auto-incrementing `versionCode`**, allowing seamless in-place updates without losing your bookmarks, themes, or settings:
 
-Have feedback, feature ideas, or bug reports? Reach out directly via email at **shahalamlaskar.official@gmail.com**!
+1. Open the **[Releases](../../releases)** section on the right side of this repository.
+2. Under the latest release's **Assets**, tap **`NOVA-Browser-v4.0.apk`** to download.
+3. Open the downloaded `.apk` and tap **Install / Update** *(if Play Protect shows an unrecognized developer prompt for a custom build, tap **More details → Install anyway**)*.
+
+*(Note: If upgrading from v3.2 or earlier to v4.0, uninstall the older version once so the new persistent signing key is registered. All future updates from v4.0 onward will install directly over your existing app.)*
+
+---
+
+## 🗂️ Project Structure
+
+```text
+Nova-Browser--advanced-/
+├── .github/workflows/
+│   └── build-apk.yml                # Automated APK build, persistent keystore cache & GitHub Releases
+├── app/
+│   ├── build.gradle                 # Android SDK 34 config & auto-incrementing versionCode
+│   └── src/main/
+│       ├── AndroidManifest.xml      # Permissions & Foreground DownloadService declaration
+│       ├── res/layout/
+│       │   └── activity_main.xml    # Dynamic Liquid Glass top bar, find bar & bottom dock
+│       └── java/com/nova/browser/
+│           ├── MainActivity.java    # Core Browser, NOVA Shield v5, Temp Mail, Themes & UI
+│           └── DownloadService.java # 4x Parallel Foreground Download Engine & MediaStore Export
+├── build.gradle                     # Root Gradle plugin config
+├── gradle.properties                # AndroidX & JVM build optimization flags
+└── settings.gradle                  # Repository & module configuration
