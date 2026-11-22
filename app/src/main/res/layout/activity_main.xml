@@ -4,45 +4,43 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0B0F17">
+    android:background="#061438">
 
-    <!-- Clean Professional Top Address Bar (52dp on Home -> 44dp on Sites) -->
+    <!-- Floating Liquid Glass Top Bar (54dp on Home -> 46dp on Websites) -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="52dp"
+        android:layout_height="54dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginBottom="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:background="#101622">
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
 
-        <Button
+        <ImageButton
             android:id="@+id/btnShield"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:text="S"
-            android:fontFamily="sans-serif-medium"
-            android:textSize="13sp"
-            android:textColor="#38BDF8"
-            android:padding="0dp" />
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="NOVA Shield" />
 
         <EditText
             android:id="@+id/etUrl"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="38dp"
             android:layout_weight="1"
             android:layout_marginStart="6dp"
             android:layout_marginEnd="6dp"
-            android:hint="Search or enter URL"
-            android:textColor="#F8FAFC"
-            android:textColorHint="#64748B"
+            android:hint="Search NOVA or enter URL..."
+            android:textColor="#FFFFFF"
+            android:textColorHint="#94A3B8"
             android:fontFamily="sans-serif"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
+            android:paddingStart="13dp"
+            android:paddingEnd="13dp"
             android:singleLine="true"
             android:imeOptions="actionGo"
             android:inputType="textUri"
@@ -51,47 +49,39 @@
         <Button
             android:id="@+id/btnTabs"
             style="?android:attr/borderlessButtonStyle"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:minWidth="0dp"
             android:minHeight="0dp"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="5dp"
             android:text="1"
             android:fontFamily="sans-serif-medium"
-            android:textColor="#E2E8F0"
-            android:textSize="12sp"
+            android:textColor="#00D2FF"
+            android:textStyle="bold"
+            android:textSize="13sp"
             android:padding="0dp" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnMenu"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:text="⋮"
-            android:textColor="#E2E8F0"
-            android:textStyle="bold"
-            android:textSize="19sp"
-            android:padding="0dp" />
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Menu" />
     </LinearLayout>
 
-    <View
-        android:id="@+id/topDivider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#1E293B" />
-
-    <!-- Inline Find-in-Page Bar -->
+    <!-- Liquid Glass Find-in-Page Bar -->
     <LinearLayout
         android:id="@+id/layoutFind"
         android:layout_width="match_parent"
         android:layout_height="44dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="10dp"
-        android:paddingEnd="8dp"
-        android:background="#101622"
+        android:paddingStart="8dp"
+        android:paddingEnd="6dp"
         android:visibility="gone">
 
         <EditText
@@ -99,11 +89,11 @@
             android:layout_width="0dp"
             android:layout_height="34dp"
             android:layout_weight="1"
-            android:hint="Find in page"
-            android:textColor="#F8FAFC"
-            android:textColorHint="#64748B"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
+            android:hint="Find in page..."
+            android:textColor="#FFFFFF"
+            android:textColorHint="#94A3B8"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
             android:singleLine="true"
             android:textSize="13sp" />
 
@@ -112,131 +102,115 @@
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="56dp"
             android:layout_height="34dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:text="Next"
             android:textAllCaps="false"
-            android:fontFamily="sans-serif-medium"
-            android:textColor="#38BDF8"
-            android:textSize="13sp" />
+            android:textColor="#00D2FF"
+            android:textStyle="bold"
+            android:textSize="12.5sp" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnFindClose"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="34dp"
             android:layout_height="34dp"
-            android:text="×"
-            android:textColor="#94A3B8"
-            android:textSize="20sp"
-            android:padding="0dp" />
+            android:background="@android:color/transparent"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:contentDescription="Close Find" />
     </LinearLayout>
 
-    <!-- Slim Loading Progress Bar -->
+    <!-- Glowing Slim Progress Bar -->
     <ProgressBar
         android:id="@+id/progressBar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="2dp"
+        android:layout_height="3dp"
         android:max="100"
-        android:progressTint="#38BDF8"
+        android:progressTint="#00D2FF"
         android:progressBackgroundTint="#1E293B"
         android:visibility="gone" />
 
-    <!-- Webpage Container -->
+    <!-- Main Webpage Container -->
     <FrameLayout
         android:id="@+id/webContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <View
-        android:id="@+id/bottomDivider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#1E293B" />
-
-    <!-- Minimalist Flat Bottom Navigation Bar -->
+    <!-- Floating Liquid Glass Bottom Dock (54dp on Home -> 46dp on Websites) -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="match_parent"
-        android:layout_height="46dp"
+        android:layout_height="54dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="5dp"
         android:orientation="horizontal"
         android:gravity="center"
-        android:paddingStart="6dp"
-        android:paddingEnd="6dp"
-        android:background="#101622"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
         android:weightSum="6">
 
-        <Button
+        <ImageButton
             android:id="@+id/btnBack"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="‹"
-            android:textSize="22sp"
-            android:padding="0dp"
-            android:textColor="#CBD5E1" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Back" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnForward"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="›"
-            android:textSize="22sp"
-            android:padding="0dp"
-            android:textColor="#CBD5E1" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Forward" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnReload"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="↻"
-            android:textSize="17sp"
-            android:padding="0dp"
-            android:textColor="#CBD5E1" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Reload" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnHome"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="⌂"
-            android:textSize="19sp"
-            android:padding="0dp"
-            android:textColor="#38BDF8" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Home" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnBookmarks"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="☆"
-            android:textSize="17sp"
-            android:padding="0dp"
-            android:textColor="#CBD5E1" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="9dp"
+            android:contentDescription="Bookmarks" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnDownloads"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="↓"
-            android:textSize="17sp"
-            android:padding="0dp"
-            android:textColor="#CBD5E1" />
+            android:layout_margin="2.5dp"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:contentDescription="Downloads" />
     </LinearLayout>
 
 </LinearLayout>
