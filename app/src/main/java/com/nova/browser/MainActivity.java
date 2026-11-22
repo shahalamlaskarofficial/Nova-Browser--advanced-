@@ -15,9 +15,17 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -53,6 +61,8 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -99,16 +109,414 @@ public class MainActivity extends AppCompatActivity {
     private static final String DEV_NAME = "Shah Alam Laskar";
     private static final String DEV_EMAIL = "shahalamlaskar.official@gmail.com";
     private static final String DEV_GITHUB = "https://github.com/shahalamlaskarofficial";
-    private static final String APP_VERSION = "4.5";
+    private static final String APP_VERSION = "4.6";
     private static final int MAX_SYNCED_DOMAINS = 175000;
 
-    // Refined Professional Theme Keys
-    private static final String THEME_OBSIDIAN = "obsidian";
+    // Vibrant Liquid Glass Theme Keys
+    private static final String THEME_SAPPHIRE = "sapphire";
     private static final String THEME_AMOLED = "amoled";
-    private static final String THEME_SLATE = "slate";
-    private static final String THEME_INDIGO = "indigo";
-    private static final String THEME_FOREST = "forest";
-    private static final String THEME_LIGHT = "light";
+    private static final String THEME_CYBERPUNK = "cyberpunk";
+    private static final String THEME_SUNSET = "sunset";
+    private static final String THEME_EMERALD = "emerald";
+    private static final String THEME_FROST = "frost";
+
+    // Drawn Vector Icon Types
+    private static final int IC_SHIELD = 1;
+    private static final int IC_SHIELD_OFF = 2;
+    private static final int IC_SHIELD_WARN = 3;
+    private static final int IC_BACK = 4;
+    private static final int IC_FORWARD = 5;
+    private static final int IC_RELOAD = 6;
+    private static final int IC_HOME = 7;
+    private static final int IC_STAR = 8;
+    private static final int IC_DOWNLOAD = 9;
+    private static final int IC_MENU = 10;
+    private static final int IC_CLOSE = 11;
+    private static final int IC_MAIL = 12;
+    private static final int IC_UNLOCK = 13;
+    private static final int IC_PALETTE = 14;
+    private static final int IC_BOLT = 15;
+    private static final int IC_SEARCH = 16;
+    private static final int IC_BOOK = 17;
+    private static final int IC_DESKTOP = 18;
+    private static final int IC_PRIVATE = 19;
+    private static final int IC_SETTINGS = 20;
+    private static final int IC_HISTORY = 21;
+    private static final int IC_SHARE = 22;
+    private static final int IC_TRASH = 23;
+    private static final int IC_USER = 24;
+    private static final int IC_COPY = 25;
+    private static final int IC_PAUSE = 26;
+    private static final int IC_PLAY = 27;
+    private static final int IC_FOLDER = 28;
+    private static final int IC_IMAGE = 29;
+    private static final int IC_GLOBE = 30;
+    private static final int IC_PLUS = 31;
+    private static final int IC_CHECK = 32;
+    private static final int IC_LINK = 33;
+
+    // =========================================================================
+    // CUSTOM ANTI-ALIASED 24x24 VECTOR ICON ENGINE (ZERO EMOJIS, ZERO XML ASSETS)
+    // =========================================================================
+    private static class VectorIconDrawable extends Drawable {
+        private final int type;
+        private final int color;
+        private final int sizePx;
+        private final int badgeCount;
+        private final Paint strokePaint;
+        private final Paint fillPaint;
+        private final Paint badgePaint;
+        private final Paint badgeTextPaint;
+
+        VectorIconDrawable(int type, int color, int sizePx, int badgeCount) {
+            this.type = type;
+            this.color = color;
+            this.sizePx = sizePx;
+            this.badgeCount = badgeCount;
+
+            strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            strokePaint.setColor(color);
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setStrokeWidth(2.0f);
+            strokePaint.setStrokeCap(Paint.Cap.ROUND);
+            strokePaint.setStrokeJoin(Paint.Join.ROUND);
+
+            fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            fillPaint.setColor(color);
+            fillPaint.setStyle(Paint.Style.FILL);
+
+            badgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            badgePaint.setColor(Color.parseColor("#00E676"));
+            badgePaint.setStyle(Paint.Style.FILL);
+
+            badgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            badgeTextPaint.setColor(Color.parseColor("#041E12"));
+            badgeTextPaint.setTextSize(8.2f);
+            badgeTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
+            badgeTextPaint.setTextAlign(Paint.Align.CENTER);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect b = getBounds();
+            float w = b.width() > 0 ? b.width() : sizePx;
+            float h = b.height() > 0 ? b.height() : sizePx;
+            canvas.save();
+            canvas.translate(b.left, b.top);
+            canvas.scale(w / 24f, h / 24f);
+
+            Path p = new Path();
+            switch (type) {
+                case IC_SHIELD:
+                case IC_SHIELD_OFF:
+                case IC_SHIELD_WARN:
+                    p.moveTo(12f, 2.5f);
+                    p.lineTo(20f, 5.8f);
+                    p.lineTo(20f, 11.5f);
+                    p.cubicTo(20f, 16.6f, 16.5f, 20.2f, 12f, 21.8f);
+                    p.cubicTo(7.5f, 20.2f, 4f, 16.6f, 4f, 11.5f);
+                    p.lineTo(4f, 5.8f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    if (type == IC_SHIELD) {
+                        Path chk = new Path();
+                        chk.moveTo(8.5f, 12.2f);
+                        chk.lineTo(11f, 14.7f);
+                        chk.lineTo(15.8f, 9.6f);
+                        canvas.drawPath(chk, strokePaint);
+                    } else if (type == IC_SHIELD_OFF) {
+                        canvas.drawLine(7f, 7f, 17f, 17f, strokePaint);
+                    } else {
+                        canvas.drawLine(12f, 8.2f, 12f, 13f, strokePaint);
+                        canvas.drawCircle(12f, 16.2f, 1.1f, fillPaint);
+                    }
+                    break;
+
+                case IC_BACK:
+                    p.moveTo(15.5f, 5.5f);
+                    p.lineTo(9f, 12f);
+                    p.lineTo(15.5f, 18.5f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_FORWARD:
+                    p.moveTo(8.5f, 5.5f);
+                    p.lineTo(15f, 12f);
+                    p.lineTo(8.5f, 18.5f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_RELOAD:
+                    canvas.drawArc(new RectF(4.5f, 4.5f, 19.5f, 19.5f), -45f, 295f, false, strokePaint);
+                    p.moveTo(15.2f, 4.2f);
+                    p.lineTo(19.5f, 4.8f);
+                    p.lineTo(18.6f, 9.1f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_HOME:
+                    p.moveTo(3.5f, 11f);
+                    p.lineTo(12f, 3.8f);
+                    p.lineTo(20.5f, 11f);
+                    canvas.drawPath(p, strokePaint);
+                    Path body = new Path();
+                    body.moveTo(6f, 9.5f);
+                    body.lineTo(6f, 19.8f);
+                    body.lineTo(18f, 19.8f);
+                    body.lineTo(18f, 9.5f);
+                    canvas.drawPath(body, strokePaint);
+                    canvas.drawLine(10.2f, 19.8f, 10.2f, 14.5f, strokePaint);
+                    canvas.drawLine(10.2f, 14.5f, 13.8f, 14.5f, strokePaint);
+                    canvas.drawLine(13.8f, 14.5f, 13.8f, 19.8f, strokePaint);
+                    break;
+
+                case IC_STAR:
+                    p.moveTo(12f, 3.2f);
+                    p.lineTo(14.7f, 8.7f);
+                    p.lineTo(20.8f, 9.6f);
+                    p.lineTo(16.4f, 13.8f);
+                    p.lineTo(17.4f, 19.9f);
+                    p.lineTo(12f, 17f);
+                    p.lineTo(6.6f, 19.9f);
+                    p.lineTo(7.6f, 13.8f);
+                    p.lineTo(3.2f, 9.6f);
+                    p.lineTo(9.3f, 8.7f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_DOWNLOAD:
+                    canvas.drawLine(12f, 4f, 12f, 15.2f, strokePaint);
+                    p.moveTo(7.5f, 11.2f);
+                    p.lineTo(12f, 15.8f);
+                    p.lineTo(16.5f, 11.2f);
+                    canvas.drawPath(p, strokePaint);
+                    Path tray = new Path();
+                    tray.moveTo(4.5f, 16.5f);
+                    tray.lineTo(4.5f, 19.8f);
+                    tray.lineTo(19.5f, 19.8f);
+                    tray.lineTo(19.5f, 16.5f);
+                    canvas.drawPath(tray, strokePaint);
+                    if (badgeCount > 0) {
+                        canvas.drawCircle(18.5f, 6.0f, 5.2f, badgePaint);
+                        String txt = badgeCount > 9 ? "9+" : String.valueOf(badgeCount);
+                        canvas.drawText(txt, 18.5f, 8.8f, badgeTextPaint);
+                    }
+                    break;
+
+                case IC_MENU:
+                    canvas.drawCircle(12f, 5.5f, 1.7f, fillPaint);
+                    canvas.drawCircle(12f, 12f, 1.7f, fillPaint);
+                    canvas.drawCircle(12f, 18.5f, 1.7f, fillPaint);
+                    break;
+
+                case IC_CLOSE:
+                    canvas.drawLine(6f, 6f, 18f, 18f, strokePaint);
+                    canvas.drawLine(18f, 6f, 6f, 18f, strokePaint);
+                    break;
+
+                case IC_MAIL:
+                    canvas.drawRoundRect(new RectF(3.5f, 5.5f, 20.5f, 18.5f), 2.2f, 2.2f, strokePaint);
+                    p.moveTo(4.2f, 6.8f);
+                    p.lineTo(12f, 12.8f);
+                    p.lineTo(19.8f, 6.8f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_UNLOCK:
+                    canvas.drawRoundRect(new RectF(5f, 10.5f, 19f, 20.5f), 2.2f, 2.2f, strokePaint);
+                    canvas.drawArc(new RectF(8f, 3.5f, 16f, 12.5f), 180f, 145f, false, strokePaint);
+                    canvas.drawLine(8f, 8f, 8f, 10.5f, strokePaint);
+                    canvas.drawCircle(12f, 15.5f, 1.4f, fillPaint);
+                    break;
+
+                case IC_PALETTE:
+                    canvas.drawCircle(12f, 12f, 8.5f, strokePaint);
+                    canvas.drawCircle(9.2f, 9.2f, 1.4f, fillPaint);
+                    canvas.drawCircle(14.8f, 9.2f, 1.4f, fillPaint);
+                    canvas.drawCircle(8.5f, 14f, 1.4f, fillPaint);
+                    canvas.drawCircle(15.2f, 14.5f, 1.6f, fillPaint);
+                    break;
+
+                case IC_BOLT:
+                    p.moveTo(13.5f, 2.8f);
+                    p.lineTo(5.5f, 13.2f);
+                    p.lineTo(11.6f, 13.2f);
+                    p.lineTo(10.5f, 21.2f);
+                    p.lineTo(18.5f, 10.8f);
+                    p.lineTo(12.4f, 10.8f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_SEARCH:
+                    canvas.drawCircle(10.5f, 10.5f, 6.2f, strokePaint);
+                    canvas.drawLine(15.2f, 15.2f, 20f, 20f, strokePaint);
+                    break;
+
+                case IC_BOOK:
+                    p.moveTo(4f, 5.5f);
+                    p.lineTo(10.5f, 5.5f);
+                    p.quadTo(12f, 5.5f, 12f, 7.5f);
+                    p.lineTo(12f, 19.5f);
+                    p.quadTo(12f, 18f, 10f, 18f);
+                    p.lineTo(4f, 18f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    Path p2 = new Path();
+                    p2.moveTo(20f, 5.5f);
+                    p2.lineTo(13.5f, 5.5f);
+                    p2.quadTo(12f, 5.5f, 12f, 7.5f);
+                    p2.lineTo(12f, 19.5f);
+                    p2.quadTo(12f, 18f, 14f, 18f);
+                    p2.lineTo(20f, 18f);
+                    p2.close();
+                    canvas.drawPath(p2, strokePaint);
+                    break;
+
+                case IC_DESKTOP:
+                    canvas.drawRoundRect(new RectF(3.5f, 4.5f, 20.5f, 16f), 2f, 2f, strokePaint);
+                    canvas.drawLine(12f, 16f, 12f, 19.5f, strokePaint);
+                    canvas.drawLine(8f, 19.5f, 16f, 19.5f, strokePaint);
+                    break;
+
+                case IC_PRIVATE:
+                    canvas.drawLine(3.5f, 11.2f, 20.5f, 11.2f, strokePaint);
+                    p.moveTo(6.5f, 11.2f);
+                    p.lineTo(8.5f, 5.5f);
+                    p.lineTo(15.5f, 5.5f);
+                    p.lineTo(17.5f, 11.2f);
+                    canvas.drawPath(p, strokePaint);
+                    canvas.drawCircle(8.5f, 16.2f, 2.5f, strokePaint);
+                    canvas.drawCircle(15.5f, 16.2f, 2.5f, strokePaint);
+                    canvas.drawLine(11f, 16.2f, 13f, 16.2f, strokePaint);
+                    break;
+
+                case IC_SETTINGS:
+                    canvas.drawLine(4f, 7f, 20f, 7f, strokePaint);
+                    canvas.drawLine(4f, 12f, 20f, 12f, strokePaint);
+                    canvas.drawLine(4f, 17f, 20f, 17f, strokePaint);
+                    canvas.drawCircle(9f, 7f, 2.1f, fillPaint);
+                    canvas.drawCircle(15.5f, 12f, 2.1f, fillPaint);
+                    canvas.drawCircle(10.5f, 17f, 2.1f, fillPaint);
+                    break;
+
+                case IC_HISTORY:
+                    canvas.drawCircle(12f, 12f, 8.2f, strokePaint);
+                    canvas.drawLine(12f, 7.5f, 12f, 12f, strokePaint);
+                    canvas.drawLine(12f, 12f, 15.5f, 14f, strokePaint);
+                    break;
+
+                case IC_SHARE:
+                    canvas.drawCircle(17.5f, 5.5f, 2.3f, strokePaint);
+                    canvas.drawCircle(6.5f, 12f, 2.3f, strokePaint);
+                    canvas.drawCircle(17.5f, 18.5f, 2.3f, strokePaint);
+                    canvas.drawLine(8.6f, 10.8f, 15.4f, 6.7f, strokePaint);
+                    canvas.drawLine(8.6f, 13.2f, 15.4f, 17.3f, strokePaint);
+                    break;
+
+                case IC_TRASH:
+                    canvas.drawLine(4.5f, 6.5f, 19.5f, 6.5f, strokePaint);
+                    canvas.drawLine(9.5f, 4f, 14.5f, 4f, strokePaint);
+                    p.moveTo(6.5f, 6.5f);
+                    p.lineTo(7.5f, 19.8f);
+                    p.lineTo(16.5f, 19.8f);
+                    p.lineTo(17.5f, 6.5f);
+                    canvas.drawPath(p, strokePaint);
+                    canvas.drawLine(10.2f, 10f, 10.2f, 16.5f, strokePaint);
+                    canvas.drawLine(13.8f, 10f, 13.8f, 16.5f, strokePaint);
+                    break;
+
+                case IC_USER:
+                    canvas.drawCircle(12f, 8f, 3.6f, strokePaint);
+                    canvas.drawArc(new RectF(5f, 13.8f, 19f, 23f), 180f, 180f, false, strokePaint);
+                    break;
+
+                case IC_COPY:
+                    canvas.drawRoundRect(new RectF(9f, 9f, 19.5f, 20f), 2f, 2f, strokePaint);
+                    p.moveTo(15f, 9f);
+                    p.lineTo(15f, 5.5f);
+                    p.lineTo(5.5f, 5.5f);
+                    p.lineTo(5.5f, 16f);
+                    p.lineTo(9f, 16f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_PAUSE:
+                    canvas.drawLine(9f, 6f, 9f, 18f, strokePaint);
+                    canvas.drawLine(15f, 6f, 15f, 18f, strokePaint);
+                    break;
+
+                case IC_PLAY:
+                    p.moveTo(8f, 5.5f);
+                    p.lineTo(18.5f, 12f);
+                    p.lineTo(8f, 18.5f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_FOLDER:
+                    p.moveTo(3.5f, 6.5f);
+                    p.lineTo(9.5f, 6.5f);
+                    p.lineTo(11.5f, 8.8f);
+                    p.lineTo(20.5f, 8.8f);
+                    p.lineTo(20.5f, 18.8f);
+                    p.lineTo(3.5f, 18.8f);
+                    p.close();
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_IMAGE:
+                    canvas.drawRoundRect(new RectF(3.8f, 4.8f, 20.2f, 19.2f), 2.2f, 2.2f, strokePaint);
+                    canvas.drawCircle(9f, 9.5f, 1.5f, fillPaint);
+                    p.moveTo(4.5f, 17f);
+                    p.lineTo(10f, 12.2f);
+                    p.lineTo(13.5f, 15.2f);
+                    p.lineTo(16.2f, 12.6f);
+                    p.lineTo(19.6f, 17f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_GLOBE:
+                    canvas.drawCircle(12f, 12f, 8.5f, strokePaint);
+                    canvas.drawOval(new RectF(8f, 3.5f, 16f, 20.5f), strokePaint);
+                    canvas.drawLine(3.8f, 12f, 20.2f, 12f, strokePaint);
+                    break;
+
+                case IC_PLUS:
+                    canvas.drawLine(12f, 5f, 12f, 19f, strokePaint);
+                    canvas.drawLine(5f, 12f, 19f, 12f, strokePaint);
+                    break;
+
+                case IC_CHECK:
+                    p.moveTo(5f, 12.5f);
+                    p.lineTo(10f, 17.2f);
+                    p.lineTo(19.2f, 7.2f);
+                    canvas.drawPath(p, strokePaint);
+                    break;
+
+                case IC_LINK:
+                    canvas.drawRoundRect(new RectF(3.5f, 8.5f, 13.5f, 15.5f), 3.5f, 3.5f, strokePaint);
+                    canvas.drawRoundRect(new RectF(10.5f, 8.5f, 20.5f, 15.5f), 3.5f, 3.5f, strokePaint);
+                    break;
+            }
+            canvas.restore();
+        }
+
+        @Override public void setAlpha(int alpha) { strokePaint.setAlpha(alpha); fillPaint.setAlpha(alpha); }
+        @Override public void setColorFilter(ColorFilter cf) { strokePaint.setColorFilter(cf); fillPaint.setColorFilter(cf); }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+        @Override public int getIntrinsicWidth() { return sizePx; }
+        @Override public int getIntrinsicHeight() { return sizePx; }
+    }
+
+    private Drawable icon(int type, int color, int sizeDp) {
+        return new VectorIconDrawable(type, color, dp(sizeDp), 0);
+    }
+
+    private Drawable iconWithBadge(int type, int color, int sizeDp, int badge) {
+        return new VectorIconDrawable(type, color, dp(sizeDp), badge);
+    }
 
     private static class QueueCardRefs {
         TextView tvName;
@@ -156,22 +564,22 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void openCustomizePage() {
-            uiHandler.post(MainActivity.this::showCustomizeThemeSheet);
+            uiHandler.post(MainActivity.this::showCustomizeThemeDialog);
         }
 
         @JavascriptInterface
         public void openTempMailPage() {
-            uiHandler.post(MainActivity.this::showTempMailSheet);
+            uiHandler.post(MainActivity.this::showTempMailDialog);
         }
 
         @JavascriptInterface
         public void openShieldPage() {
-            uiHandler.post(MainActivity.this::showShieldSheet);
+            uiHandler.post(MainActivity.this::showOrganizedShieldDashboard);
         }
 
         @JavascriptInterface
         public void openDownloadsPage() {
-            uiHandler.post(MainActivity.this::showDownloadManagerSheet);
+            uiHandler.post(MainActivity.this::showTurboDownloadManager);
         }
 
         @JavascriptInterface
@@ -203,10 +611,10 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout webContainer;
     private EditText etUrl, etFind;
     private ProgressBar progressBar;
-    private Button btnShield, btnTabs, btnMenu;
-    private Button btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads;
+    private ImageButton btnShield, btnMenu, btnFindClose;
+    private ImageButton btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads;
+    private Button btnTabs;
     private LinearLayout rootLayout, topBar, bottomBar, layoutFind;
-    private View topDivider, bottomDivider;
 
     private final List<WebView> tabs = new ArrayList<>();
     private final List<String> closedTabs = new ArrayList<>();
@@ -222,8 +630,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean isBatterySaver = true;
     private boolean isFullScreen = false;
     private boolean isNoJsBypassActive = false;
-    private String currentTheme = THEME_OBSIDIAN;
-    private int currentBarHeightDp = 52;
+    private String currentTheme = THEME_SAPPHIRE;
+    private int currentBarHeightDp = 54;
     private int textZoomPercent = 100;
     private String defaultUserAgent;
 
@@ -356,7 +764,7 @@ public class MainActivity extends AppCompatActivity {
         isAdBlockEnabled = prefs.getBoolean("adblock_enabled", true);
         isAggressiveInterstitialBlock = prefs.getBoolean("aggressive_interstitial", true);
         isBatterySaver = prefs.getBoolean("battery_saver", true);
-        currentTheme = prefs.getString("nova_theme_v45", THEME_OBSIDIAN);
+        currentTheme = prefs.getString("nova_theme", THEME_SAPPHIRE);
         allowlistDomains = new HashSet<>(prefs.getStringSet("allowlist", new HashSet<>()));
 
         if (Build.VERSION.SDK_INT >= 33) {
@@ -378,8 +786,6 @@ public class MainActivity extends AppCompatActivity {
         topBar = findViewById(R.id.topBar);
         bottomBar = findViewById(R.id.bottomBar);
         layoutFind = findViewById(R.id.layoutFind);
-        topDivider = findViewById(R.id.topDivider);
-        bottomDivider = findViewById(R.id.bottomDivider);
         webContainer = findViewById(R.id.webContainer);
         etUrl = findViewById(R.id.etUrl);
         etFind = findViewById(R.id.etFind);
@@ -395,9 +801,9 @@ public class MainActivity extends AppCompatActivity {
         btnBookmarks = findViewById(R.id.btnBookmarks);
         btnDownloads = findViewById(R.id.btnDownloads);
         Button btnFindNext = findViewById(R.id.btnFindNext);
-        Button btnFindClose = findViewById(R.id.btnFindClose);
+        btnFindClose = findViewById(R.id.btnFindClose);
 
-        applyCleanTheme();
+        applyLiquidGlassTheme();
         createNewTab("nova://home");
 
         etUrl.setOnEditorActionListener((v, actionId, event) -> {
@@ -409,21 +815,24 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-        btnShield.setOnClickListener(v -> showShieldSheet());
-        btnTabs.setOnClickListener(v -> showTabSwitcherSheet());
-        btnMenu.setOnClickListener(v -> showMainBottomSheet());
+        btnShield.setOnClickListener(v -> { pulseButton(v); showOrganizedShieldDashboard(); });
+        btnTabs.setOnClickListener(v -> { pulseButton(v); showTabSwitcherDialog(); });
+        btnMenu.setOnClickListener(v -> { pulseButton(v); showLiquidGlassMainMenu(); });
 
         btnBack.setOnClickListener(v -> {
+            pulseButton(v);
             WebView wv = getCurrentWebView();
             if (wv != null && wv.canGoBack()) wv.goBack();
         });
 
         btnForward.setOnClickListener(v -> {
+            pulseButton(v);
             WebView wv = getCurrentWebView();
             if (wv != null && wv.canGoForward()) wv.goForward();
         });
 
         btnReload.setOnClickListener(v -> {
+            pulseButton(v);
             WebView wv = getCurrentWebView();
             if (wv != null) {
                 String url = wv.getUrl();
@@ -433,6 +842,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnHome.setOnClickListener(v -> {
+            pulseButton(v);
             WebView wv = getCurrentWebView();
             if (wv != null) {
                 resetTabNoJsMode(wv);
@@ -440,8 +850,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        btnBookmarks.setOnClickListener(v -> showBookmarksSheet());
-        btnDownloads.setOnClickListener(v -> showDownloadManagerSheet());
+        btnBookmarks.setOnClickListener(v -> { pulseButton(v); showBookmarksDialog(); });
+        btnDownloads.setOnClickListener(v -> { pulseButton(v); showTurboDownloadManager(); });
 
         etFind.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -477,7 +887,7 @@ public class MainActivity extends AppCompatActivity {
                     closeTab(currentTabIndex);
                 } else if (DownloadService.hasActiveDownloads()) {
                     Toast.makeText(MainActivity.this,
-                            "Downloads remain active in the background",
+                            "Downloads continue running in the background",
                             Toast.LENGTH_SHORT).show();
                     moveTaskToBack(true);
                 } else {
@@ -488,466 +898,475 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // CLEAN DESIGN SYSTEM (HIGH CONTRAST, ZERO EMOJIS, NATIVE BOTTOM SHEETS)
+    // LIQUID GLASS v4.0 ENGINE + VIBRANT THEMES + DRAWN VECTOR BUTTON ICONS
     // =========================================================================
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
-    private boolean isLightTheme() {
-        return THEME_LIGHT.equals(currentTheme);
-    }
-
-    private String getAccentHex() {
-        switch (currentTheme) {
-            case THEME_AMOLED: return "#38BDF8";
-            case THEME_SLATE: return "#60A5FA";
-            case THEME_INDIGO: return "#818CF8";
-            case THEME_FOREST: return "#34D399";
-            case THEME_LIGHT: return "#2563EB";
-            default: return "#38BDF8";
-        }
-    }
-
-    private int colCanvas() {
-        if (isLightTheme()) return Color.parseColor("#F8FAFC");
-        switch (currentTheme) {
-            case THEME_AMOLED: return Color.parseColor("#000000");
-            case THEME_SLATE: return Color.parseColor("#0F172A");
-            case THEME_INDIGO: return Color.parseColor("#0C0D1D");
-            case THEME_FOREST: return Color.parseColor("#071310");
-            default: return Color.parseColor("#0B0F17");
-        }
-    }
-
-    private int colSurface() {
-        if (isLightTheme()) return Color.parseColor("#FFFFFF");
-        switch (currentTheme) {
-            case THEME_AMOLED: return Color.parseColor("#0A0C10");
-            case THEME_SLATE: return Color.parseColor("#162032");
-            case THEME_INDIGO: return Color.parseColor("#14162B");
-            case THEME_FOREST: return Color.parseColor("#0E1F1B");
-            default: return Color.parseColor("#121826");
-        }
-    }
-
-    private int colElevated() {
-        if (isLightTheme()) return Color.parseColor("#F1F5F9");
-        switch (currentTheme) {
-            case THEME_AMOLED: return Color.parseColor("#151921");
-            case THEME_SLATE: return Color.parseColor("#1E293B");
-            case THEME_INDIGO: return Color.parseColor("#1D203D");
-            case THEME_FOREST: return Color.parseColor("#163029");
-            default: return Color.parseColor("#1A2234");
-        }
-    }
-
-    private int colBorder() {
-        return isLightTheme() ? Color.parseColor("#CBD5E1") : Color.parseColor("#243045");
-    }
-
-    private int colTextPrimary() {
-        return isLightTheme() ? Color.parseColor("#0F172A") : Color.parseColor("#F8FAFC");
-    }
-
-    private int colTextSecondary() {
-        return isLightTheme() ? Color.parseColor("#475569") : Color.parseColor("#94A3B8");
-    }
-
-    private GradientDrawable makeRoundedBg(int fillColor, int strokeColor, int radiusDp, int strokeDp) {
-        GradientDrawable gd = new GradientDrawable();
-        gd.setColor(fillColor);
-        gd.setCornerRadius(dp(radiusDp));
-        if (strokeDp > 0) gd.setStroke(dp(strokeDp), strokeColor);
-        return gd;
-    }
-
-    private GradientDrawable makeBottomSheetBg() {
-        GradientDrawable gd = new GradientDrawable();
-        gd.setColor(colSurface());
-        float r = dp(20);
-        gd.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-        gd.setStroke(dp(1), colBorder());
-        return gd;
-    }
-
-    private Dialog createBottomSheetDialog(LinearLayout content, boolean fixedTallHeight) {
-        Dialog dialog = new Dialog(this);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        LinearLayout sheet = new LinearLayout(this);
-        sheet.setOrientation(LinearLayout.VERTICAL);
-        sheet.setBackground(makeBottomSheetBg());
-        sheet.setPadding(dp(16), dp(10), dp(16), dp(18));
-
-        // Subtle drag handle
-        View handle = new View(this);
-        handle.setBackground(makeRoundedBg(colBorder(), Color.TRANSPARENT, 3, 0));
-        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(dp(38), dp(4));
-        hLp.gravity = Gravity.CENTER_HORIZONTAL;
-        hLp.setMargins(0, 0, 0, dp(12));
-        sheet.addView(handle, hLp);
-
-        sheet.addView(content, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                fixedTallHeight ? 0 : ViewGroup.LayoutParams.WRAP_CONTENT,
-                fixedTallHeight ? 1f : 0f));
-
-        dialog.setContentView(sheet);
-        Window win = dialog.getWindow();
-        if (win != null) {
-            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            win.setGravity(Gravity.BOTTOM);
-            int h = fixedTallHeight
-                    ? (int) (getResources().getDisplayMetrics().heightPixels * 0.78f)
-                    : ViewGroup.LayoutParams.WRAP_CONTENT;
-            win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, h);
-            win.setDimAmount(0.58f);
-        }
-        return dialog;
-    }
-
-    private LinearLayout makeSheetHeader(String title, String subtitle, Runnable onClose) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(2), 0, dp(2), dp(12));
-
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText(title);
-        tvTitle.setTextColor(colTextPrimary());
-        tvTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        tvTitle.setTextSize(16.5f);
-        titles.addView(tvTitle);
-
-        if (subtitle != null && !subtitle.isEmpty()) {
-            TextView tvSub = new TextView(this);
-            tvSub.setText(subtitle);
-            tvSub.setTextColor(colTextSecondary());
-            tvSub.setTextSize(12f);
-            tvSub.setSingleLine(true);
-            tvSub.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-            titles.addView(tvSub);
-        }
-        row.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        Button btnX = makeSecondaryButton("Close", null);
-        btnX.setOnClickListener(v -> onClose.run());
-        row.addView(btnX, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
-        return row;
-    }
-
-    private LinearLayout makeCleanCard() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, dp(10));
-        card.setLayoutParams(lp);
-        return card;
-    }
-
-    private Button makePrimaryButton(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setAllCaps(false);
-        b.setTextSize(13f);
-        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        b.setTextColor(Color.parseColor(isLightTheme() ? "#FFFFFF" : "#071019"));
-        b.setBackground(makeRoundedBg(Color.parseColor(getAccentHex()), Color.TRANSPARENT, 10, 0));
-        b.setPadding(dp(14), 0, dp(14), 0);
-        b.setMinHeight(0);
-        b.setMinimumHeight(0);
-        return b;
-    }
-
-    private Button makeSecondaryButton(String text, String customTextHex) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setAllCaps(false);
-        b.setTextSize(12.5f);
-        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        b.setTextColor(customTextHex != null ? Color.parseColor(customTextHex) : colTextPrimary());
-        b.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
-        b.setPadding(dp(12), 0, dp(12), 0);
-        b.setMinHeight(0);
-        b.setMinimumHeight(0);
-        return b;
-    }
-
-    private LinearLayout makeListRow(String title, String badgeText, String badgeColorHex, Runnable onClick) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(10), dp(12), dp(10));
-        row.setBackground(makeRoundedBg(Color.TRANSPARENT, Color.TRANSPARENT, 8, 0));
-
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText(title);
-        tvTitle.setTextColor(colTextPrimary());
-        tvTitle.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        tvTitle.setTextSize(14f);
-        row.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        if (badgeText != null && !badgeText.isEmpty()) {
-            TextView tvBadge = new TextView(this);
-            tvBadge.setText(badgeText);
-            tvBadge.setTextColor(badgeColorHex != null ? Color.parseColor(badgeColorHex) : colTextSecondary());
-            tvBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            tvBadge.setTextSize(11.5f);
-            tvBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
-            tvBadge.setBackground(makeRoundedBg(colElevated(), colBorder(), 6, 1));
-            row.addView(tvBadge);
-        }
-
-        row.setOnClickListener(v -> onClick.run());
-        return row;
-    }
-
-    private View makeHairline() {
-        View v = new View(this);
-        v.setBackgroundColor(colBorder());
-        v.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        return v;
-    }
-
-    private TextView makeSmallLabel(String text) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextColor(colTextSecondary());
-        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        tv.setTextSize(11f);
-        tv.setAllCaps(true);
-        tv.setLetterSpacing(0.06f);
-        tv.setPadding(dp(2), dp(4), 0, dp(6));
-        return tv;
-    }
-
-    private void applyCleanTheme() {
-        String accent = getAccentHex();
-        int barBg = isIncognito
-                ? Color.parseColor(isLightTheme() ? "#EFE8F8" : "#1A1228")
-                : colSurface();
-
-        rootLayout.setBackgroundColor(colCanvas());
-        topBar.setBackgroundColor(barBg);
-        bottomBar.setBackgroundColor(barBg);
-        layoutFind.setBackgroundColor(barBg);
-        topDivider.setBackgroundColor(colBorder());
-        bottomDivider.setBackgroundColor(colBorder());
-
-        etUrl.setBackground(makeRoundedBg(colElevated(), colBorder(), 18, 1));
-        etUrl.setTextColor(colTextPrimary());
-        etUrl.setHintTextColor(colTextSecondary());
-
-        etFind.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
-        etFind.setTextColor(colTextPrimary());
-        etFind.setHintTextColor(colTextSecondary());
-
-        btnShield.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
-        btnShield.setTextColor(Color.parseColor(isAdBlockEnabled ? accent : "#94A3B8"));
-
-        btnTabs.setBackground(makeRoundedBg(Color.TRANSPARENT, colTextSecondary(), 8, 1));
-        btnTabs.setTextColor(colTextPrimary());
-
-        btnMenu.setBackground(null);
-        btnMenu.setTextColor(colTextPrimary());
-
-        int dockColor = colTextSecondary();
-        for (Button dockBtn : new Button[]{btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
-            dockBtn.setBackground(null);
-            dockBtn.setTextColor(dockColor);
-        }
-        btnHome.setTextColor(Color.parseColor(accent));
-        updateDownloadDockBadge();
+    private void pulseButton(View v) {
+        v.animate().scaleX(0.88f).scaleY(0.88f).setDuration(70)
+            .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).setDuration(105).start())
+            .start();
     }
 
     private void animateBarsToDp(int targetDp) {
         if (isFullScreen || currentBarHeightDp == targetDp) return;
         currentBarHeightDp = targetDp;
 
-        final int targetTopPx = dp(targetDp);
-        final int targetBotPx = targetDp == 0 ? 0 : dp(targetDp >= 50 ? 46 : 42);
-        final int startTopPx = topBar.getLayoutParams().height;
-        final int startBotPx = bottomBar.getLayoutParams().height;
+        final int targetPx = dp(targetDp);
+        final int startPx = topBar.getLayoutParams().height;
+        final int targetMargin = targetDp == 0 ? 0 : (targetDp >= 52 ? dp(5) : dp(3));
+        final float targetScale = targetDp >= 52 ? 1.0f : (targetDp == 0 ? 0.85f : 0.92f);
 
-        ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
-        anim.setDuration(200);
+        ValueAnimator anim = ValueAnimator.ofInt(startPx, targetPx);
+        anim.setDuration(220);
         anim.setInterpolator(new DecelerateInterpolator());
         anim.addUpdateListener(va -> {
-            float f = (float) va.getAnimatedValue();
-            int curTop = Math.round(startTopPx + (targetTopPx - startTopPx) * f);
-            int curBot = Math.round(startBotPx + (targetBotPx - startBotPx) * f);
+            int val = (int) va.getAnimatedValue();
+            float alpha = targetDp == 0 ? (val / (float) Math.max(1, dp(46))) : 1f;
 
-            ViewGroup.LayoutParams topLp = topBar.getLayoutParams();
-            topLp.height = curTop;
+            LinearLayout.LayoutParams topLp = (LinearLayout.LayoutParams) topBar.getLayoutParams();
+            topLp.height = val;
+            topLp.topMargin = targetMargin;
+            topLp.bottomMargin = targetMargin;
             topBar.setLayoutParams(topLp);
-            topBar.setAlpha(targetDp == 0 ? (1f - f) : 1f);
+            topBar.setAlpha(Math.min(1f, Math.max(0f, alpha)));
 
-            ViewGroup.LayoutParams botLp = bottomBar.getLayoutParams();
-            botLp.height = curBot;
+            LinearLayout.LayoutParams botLp = (LinearLayout.LayoutParams) bottomBar.getLayoutParams();
+            botLp.height = val;
+            botLp.topMargin = targetMargin;
+            botLp.bottomMargin = targetMargin;
             bottomBar.setLayoutParams(botLp);
-            bottomBar.setAlpha(targetDp == 0 ? (1f - f) : 1f);
+            bottomBar.setAlpha(Math.min(1f, Math.max(0f, alpha)));
         });
         anim.start();
+
+        for (View b : new View[]{btnShield, btnTabs, btnMenu, btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
+            b.animate().scaleX(targetScale).scaleY(targetScale).setDuration(210).start();
+        }
+    }
+
+    private GradientDrawable makeGlassDrawable(int topColor, int bottomColor, int strokeColor, int radiusDp, int strokeDp) {
+        GradientDrawable gd = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{topColor, bottomColor});
+        gd.setCornerRadius(dp(radiusDp));
+        if (strokeDp > 0) gd.setStroke(dp(strokeDp), strokeColor);
+        return gd;
+    }
+
+    private String getAccentHex() {
+        switch (currentTheme) {
+            case THEME_AMOLED: return "#00E5FF";
+            case THEME_CYBERPUNK: return "#FF2E93";
+            case THEME_SUNSET: return "#FF8A00";
+            case THEME_EMERALD: return "#00F5A0";
+            case THEME_FROST: return "#0066FF";
+            default: return "#00D2FF";
+        }
+    }
+
+    private String getSecondaryAccentHex() {
+        switch (currentTheme) {
+            case THEME_AMOLED: return "#2979FF";
+            case THEME_CYBERPUNK: return "#B84DFF";
+            case THEME_SUNSET: return "#FFD000";
+            case THEME_EMERALD: return "#00D9F5";
+            case THEME_FROST: return "#00B4FF";
+            default: return "#3A7BD5";
+        }
+    }
+
+    private void applyLiquidGlassTheme() {
+        boolean isLight = THEME_FROST.equals(currentTheme);
+        String accent = getAccentHex();
+        int accentCol = Color.parseColor(accent);
+        int iconPrimaryCol = isLight ? Color.parseColor("#0F172A") : Color.parseColor("#F8FAFC");
+        int starCol = isLight ? Color.parseColor("#D97706") : Color.parseColor("#FFD000");
+
+        if (isLight) {
+            rootLayout.setBackground(new GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    new int[]{Color.parseColor("#E0F2FE"), Color.parseColor("#F8FAFC"), Color.parseColor("#DBEAFE")}));
+
+            int barTop = isIncognito ? Color.parseColor("#E6F3E8FF") : Color.parseColor("#E6FFFFFF");
+            int barBot = isIncognito ? Color.parseColor("#E6E9D5FF") : Color.parseColor("#CCE0F2FE");
+            int rim = Color.parseColor("#990066FF");
+
+            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
+            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
+            layoutFind.setBackground(makeGlassDrawable(barTop, barBot, rim, 18, 1));
+
+            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#F2FFFFFF"), Color.parseColor("#E6F1F5F9"), Color.parseColor("#880066FF"), 16, 1));
+            etUrl.setTextColor(Color.parseColor("#0F172A"));
+            etUrl.setHintTextColor(Color.parseColor("#64748B"));
+
+            etFind.setBackground(makeGlassDrawable(Color.parseColor("#F2FFFFFF"), Color.parseColor("#E6F1F5F9"), Color.parseColor("#880066FF"), 14, 1));
+            etFind.setTextColor(Color.parseColor("#0F172A"));
+
+            styleGlassPillButton(btnShield, "#AAFFFFFF", "#66DBEAFE", "#880066FF");
+            styleGlassPillButton(btnTabs, "#AAFFFFFF", "#66DBEAFE", "#880066FF");
+            styleGlassPillButton(btnMenu, "#AAFFFFFF", "#66FFFFFF", "#660066FF");
+
+            for (View dockBtn : new View[]{btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
+                styleGlassPillButton(dockBtn, "#AAFFFFFF", "#66E0F2FE", "#660066FF");
+            }
+            btnTabs.setTextColor(accentCol);
+        } else {
+            int bg1, bg2, bg3, barTop, barBot, rim;
+            if (THEME_AMOLED.equals(currentTheme)) {
+                bg1 = bg2 = bg3 = Color.parseColor("#000000");
+                barTop = Color.parseColor("#F0080C12");
+                barBot = Color.parseColor("#F0000000");
+                rim = Color.parseColor("#8800E5FF");
+            } else if (THEME_CYBERPUNK.equals(currentTheme)) {
+                bg1 = Color.parseColor("#180436");
+                bg2 = Color.parseColor("#350A6B");
+                bg3 = Color.parseColor("#140329");
+                barTop = Color.parseColor("#CC440E80");
+                barBot = Color.parseColor("#CC210645");
+                rim = Color.parseColor("#99FF2E93");
+            } else if (THEME_SUNSET.equals(currentTheme)) {
+                bg1 = Color.parseColor("#240902");
+                bg2 = Color.parseColor("#471705");
+                bg3 = Color.parseColor("#1A0602");
+                barTop = Color.parseColor("#CC591D06");
+                barBot = Color.parseColor("#CC2E0D03");
+                rim = Color.parseColor("#99FF8A00");
+            } else if (THEME_EMERALD.equals(currentTheme)) {
+                bg1 = Color.parseColor("#021F17");
+                bg2 = Color.parseColor("#054030");
+                bg3 = Color.parseColor("#02140F");
+                barTop = Color.parseColor("#CC074D3A");
+                barBot = Color.parseColor("#CC03291F");
+                rim = Color.parseColor("#9900F5A0");
+            } else {
+                bg1 = Color.parseColor("#061438");
+                bg2 = Color.parseColor("#0F2D75");
+                bg3 = Color.parseColor("#050F2B");
+                barTop = Color.parseColor("#CC12388A");
+                barBot = Color.parseColor("#CC091D4D");
+                rim = Color.parseColor("#9900D2FF");
+            }
+
+            if (isIncognito) {
+                barTop = Color.parseColor("#D94A044E");
+                barBot = Color.parseColor("#D92E0538");
+                rim = Color.parseColor("#AAE879F9");
+            }
+
+            rootLayout.setBackground(new GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    new int[]{bg1, bg2, bg3}));
+
+            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
+            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
+            layoutFind.setBackground(makeGlassDrawable(barTop, barBot, rim, 18, 1));
+
+            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#99040914"), Color.parseColor("#990E1A33"), rim, 16, 1));
+            etUrl.setTextColor(Color.parseColor("#FFFFFF"));
+            etUrl.setHintTextColor(Color.parseColor("#CBD5E1"));
+
+            etFind.setBackground(makeGlassDrawable(Color.parseColor("#AA040914"), Color.parseColor("#AA0E1A33"), rim, 14, 1));
+            etFind.setTextColor(Color.parseColor("#FFFFFF"));
+
+            styleGlassPillButton(btnShield, "#33FFFFFF", "#16FFFFFF", "#66FFFFFF");
+            styleGlassPillButton(btnTabs, "#38FFFFFF", "#18FFFFFF", "#77FFFFFF");
+            styleGlassPillButton(btnMenu, "#2EFFFFFF", "#14FFFFFF", "#55FFFFFF");
+
+            for (View dockBtn : new View[]{btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
+                styleGlassPillButton(dockBtn, "#26FFFFFF", "#10FFFFFF", "#44FFFFFF");
+            }
+            btnTabs.setTextColor(accentCol);
+        }
+
+        // Apply crisp drawn vector icons to all top bar & bottom dock controls
+        updateShieldToolbarIcon(false);
+        btnMenu.setImageDrawable(icon(IC_MENU, iconPrimaryCol, 19));
+        btnFindClose.setImageDrawable(icon(IC_CLOSE, Color.parseColor("#FB7185"), 17));
+        btnBack.setImageDrawable(icon(IC_BACK, iconPrimaryCol, 20));
+        btnForward.setImageDrawable(icon(IC_FORWARD, iconPrimaryCol, 20));
+        btnReload.setImageDrawable(icon(IC_RELOAD, iconPrimaryCol, 19));
+        btnHome.setImageDrawable(icon(IC_HOME, accentCol, 20));
+        btnBookmarks.setImageDrawable(icon(IC_STAR, starCol, 19));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            topBar.setElevation(dp(6));
+            bottomBar.setElevation(dp(6));
+        }
+        updateDownloadDockBadge();
+    }
+
+    private void updateShieldToolbarIcon(boolean insecureHttp) {
+        int col = !isAdBlockEnabled
+                ? Color.parseColor("#FB7185")
+                : (insecureHttp ? Color.parseColor("#FFD000") : Color.parseColor(getAccentHex()));
+        int type = !isAdBlockEnabled ? IC_SHIELD_OFF : (insecureHttp ? IC_SHIELD_WARN : IC_SHIELD);
+        btnShield.setImageDrawable(icon(type, col, 20));
+    }
+
+    private void styleGlassPillButton(View v, String topHex, String botHex, String strokeHex) {
+        v.setBackground(makeGlassDrawable(
+                Color.parseColor(topHex),
+                Color.parseColor(botHex),
+                Color.parseColor(strokeHex),
+                13, 1));
     }
 
     private void updateDownloadDockBadge() {
         int activeCount = DownloadService.getActiveCount();
         uiHandler.post(() -> {
-            if (activeCount > 0) {
-                btnDownloads.setText("↓" + activeCount);
-                btnDownloads.setTextSize(13f);
-                btnDownloads.setTextColor(Color.parseColor("#22C55E"));
-            } else {
-                btnDownloads.setText("↓");
-                btnDownloads.setTextSize(17f);
-                btnDownloads.setTextColor(colTextSecondary());
-            }
+            int col = activeCount > 0 ? Color.parseColor("#00F5A0") : Color.parseColor(getAccentHex());
+            btnDownloads.setImageDrawable(iconWithBadge(IC_DOWNLOAD, col, 20, activeCount));
         });
     }
 
-    // =========================================================================
-    // CLEAN MAIN MENU BOTTOM SHEET & SEPARATE SETTINGS SHEET
-    // =========================================================================
-
-    private void showMainBottomSheet() {
-        WebView wv = getCurrentWebView();
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-
-        final Dialog dialog = createBottomSheetDialog(body, false);
-
-        // Compact 4-action horizontal strip
-        LinearLayout quickRow = new LinearLayout(this);
-        quickRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams qrLp = new LinearLayout.LayoutParams(
+    // Reusable Liquid Glass UI Builders (with drawn vector icons, zero emojis)
+    private LinearLayout createGlassCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(13), dp(11), dp(13), dp(11));
+        card.setBackground(makeGlassDrawable(
+                Color.parseColor("#CC142442"),
+                Color.parseColor("#CC0B152B"),
+                Color.parseColor("#4DFFFFFF"),
+                16, 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        qrLp.setMargins(0, 0, 0, dp(12));
+        lp.setMargins(0, 0, 0, dp(9));
+        card.setLayoutParams(lp);
+        return card;
+    }
 
-        String[] qLabels = {"New Tab", "Shield", "Downloads", "Temp Mail"};
-        Runnable[] qActs = {
-            () -> { dialog.dismiss(); createNewTab("nova://home"); },
-            () -> { dialog.dismiss(); showShieldSheet(); },
-            () -> { dialog.dismiss(); showDownloadManagerSheet(); },
-            () -> { dialog.dismiss(); showTempMailSheet(); }
-        };
-        for (int i = 0; i < qLabels.length; i++) {
-            Button b = makeSecondaryButton(qLabels[i], i == 1 && isAdBlockEnabled ? getAccentHex() : null);
-            b.setTextSize(12f);
-            b.setPadding(dp(4), 0, dp(4), 0);
-            final int idx = i;
-            b.setOnClickListener(v -> qActs[idx].run());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
-            if (i < qLabels.length - 1) lp.setMargins(0, 0, dp(6), 0);
-            quickRow.addView(b, lp);
+    private Button createGlassButton(String text, int iconType, String topHex, String botHex, String textHex) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setTextSize(12.5f);
+        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        int tCol = Color.parseColor(textHex);
+        b.setTextColor(tCol);
+        b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        b.setBackground(makeGlassDrawable(
+                Color.parseColor(topHex),
+                Color.parseColor(botHex),
+                Color.parseColor("#4DFFFFFF"),
+                12, 1));
+        b.setPadding(dp(12), 0, dp(10), 0);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setSingleLine(true);
+        b.setEllipsize(TextUtils.TruncateAt.END);
+        if (iconType > 0) {
+            b.setCompoundDrawablesWithIntrinsicBounds(icon(iconType, tCol, 16), null, null, null);
+            b.setCompoundDrawablePadding(dp(8));
+        } else {
+            b.setGravity(Gravity.CENTER);
         }
-        body.addView(quickRow, qrLp);
+        return b;
+    }
 
-        ScrollView sc = new ScrollView(this);
-        sc.setVerticalScrollBarEnabled(false);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-        sc.addView(list);
+    private LinearLayout createModalHeader(String title, int iconType, Runnable onClose) {
+        LinearLayout hdr = new LinearLayout(this);
+        hdr.setOrientation(LinearLayout.HORIZONTAL);
+        hdr.setGravity(Gravity.CENTER_VERTICAL);
+        hdr.setPadding(dp(2), 0, dp(2), dp(10));
 
-        list.addView(makeListRow("Bypass Login / Paywall", isNoJsBypassActive ? "NO-JS" : null, "#F59E0B",
-                () -> { dialog.dismiss(); showLoginBypassSheet(wv); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Desktop Site", isDesktopMode ? "ON" : "OFF", isDesktopMode ? getAccentHex() : null,
-                () -> { dialog.dismiss(); toggleDesktopMode(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Private Browsing", isIncognito ? "ON" : "OFF", isIncognito ? "#C084FC" : null,
-                () -> { dialog.dismiss(); toggleIncognitoMode(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Find in Page", null, null, () -> {
-            dialog.dismiss();
-            layoutFind.setVisibility(View.VISIBLE);
-            etFind.requestFocus();
-        }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Reader View", null, null,
-                () -> { dialog.dismiss(); applyCleanReaderMode(wv); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("History", null, null,
-                () -> { dialog.dismiss(); showHistorySheet(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Share / Copy Link", null, null,
-                () -> { dialog.dismiss(); shareOrCopyUrl(wv); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Settings & Appearance", "More", getAccentHex(),
-                () -> { dialog.dismiss(); showSettingsSheet(); }));
+        if (iconType > 0) {
+            ImageView iv = new ImageView(this);
+            iv.setImageDrawable(icon(iconType, Color.parseColor(getAccentHex()), 20));
+            LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(dp(22), dp(22));
+            ivLp.setMargins(0, 0, dp(9), 0);
+            hdr.addView(iv, ivLp);
+        }
 
-        body.addView(sc);
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(title);
+        tvTitle.setTextColor(Color.parseColor("#FFFFFF"));
+        tvTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvTitle.setTextSize(16.5f);
+        hdr.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        ImageButton btnX = new ImageButton(this);
+        btnX.setImageDrawable(icon(IC_CLOSE, Color.parseColor("#E2E8F0"), 16));
+        btnX.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        btnX.setBackground(makeGlassDrawable(
+                Color.parseColor("#33FFFFFF"),
+                Color.parseColor("#18FFFFFF"),
+                Color.parseColor("#55FFFFFF"),
+                11, 1));
+        btnX.setOnClickListener(v -> onClose.run());
+        hdr.addView(btnX, new LinearLayout.LayoutParams(dp(34), dp(34)));
+        return hdr;
+    }
+
+    private TextView makeSectionLabel(String title, String accentHex) {
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setTextColor(Color.parseColor(accentHex));
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tv.setTextSize(10.8f);
+        tv.setLetterSpacing(0.06f);
+        tv.setPadding(dp(2), 0, 0, dp(7));
+        return tv;
+    }
+
+    private LinearLayout createModalOuterContainer() {
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(makeGlassDrawable(
+                Color.parseColor("#F50A1429"),
+                Color.parseColor("#F5050B18"),
+                Color.parseColor("#88" + getAccentHex().substring(1)),
+                24, 1));
+        outer.setPadding(dp(14), dp(14), dp(14), dp(14));
+        return outer;
+    }
+
+    private void showGlassModal(Dialog dialog, LinearLayout outer, boolean tall) {
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.setPadding(dp(12), dp(14), dp(12), dp(14));
+        wrap.addView(outer);
+        dialog.setContentView(wrap);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int h = tall
+                    ? (int) (getResources().getDisplayMetrics().heightPixels * 0.82f)
+                    : ViewGroup.LayoutParams.WRAP_CONTENT;
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, h);
+            dialog.getWindow().setDimAmount(0.72f);
+        }
         dialog.show();
     }
 
-    private void showSettingsSheet() {
+    // =========================================================================
+    // LIQUID GLASS MAIN MENU (ORGANIZED, DRAWN ICONS, SEPARATE SETTINGS)
+    // =========================================================================
+
+    private void showLiquidGlassMainMenu() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         WebView wv = getCurrentWebView();
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
+        String accent = getAccentHex();
 
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Settings", "NOVA Browser v" + APP_VERSION, dialog::dismiss));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("NOVA Browser  v" + APP_VERSION, IC_BOLT, dialog::dismiss));
 
         ScrollView sc = new ScrollView(this);
         sc.setVerticalScrollBarEnabled(false);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-        sc.addView(list);
+        LinearLayout stack = new LinearLayout(this);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        sc.addView(stack);
 
-        list.addView(makeListRow("Appearance & Wallpaper", currentTheme.toUpperCase(Locale.US), getAccentHex(),
-                () -> { dialog.dismiss(); showCustomizeThemeSheet(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Search Engine", searchEngineName, null,
-                () -> { dialog.dismiss(); showSearchEngineDialog(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Text Zoom", textZoomPercent + "%", null,
-                () -> { dialog.dismiss(); showZoomDialog(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Data Saver (Block Images)", isDataSaver ? "ON" : "OFF", isDataSaver ? getAccentHex() : null, () -> {
-            dialog.dismiss();
-            isDataSaver = !isDataSaver;
-            for (WebView tab : tabs) tab.getSettings().setBlockNetworkImage(isDataSaver);
-            if (wv != null) wv.reload();
-            Toast.makeText(this, "Data Saver " + (isDataSaver ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
-        }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Full-Screen Mode", isFullScreen ? "ON" : "OFF", isFullScreen ? getAccentHex() : null,
-                () -> { dialog.dismiss(); toggleFullScreen(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Memory & Battery", getRamUsageMb(), null,
-                () -> { dialog.dismiss(); showPerformanceSheet(); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Translate Current Page", null, null, () -> {
-            dialog.dismiss();
-            if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
-                wv.loadUrl("https://translate.google.com/translate?sl=auto&tl=en&u=" + Uri.encode(wv.getUrl()));
-            }
-        }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Clear Browsing Data", null, "#F87171",
-                () -> { dialog.dismiss(); clearBrowserData(wv); }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("About & Developer", "v" + APP_VERSION, null,
-                () -> { dialog.dismiss(); showAboutSheet(); }));
+        // Section 1: Core Hub
+        LinearLayout hubCard = createGlassCard();
+        hubCard.addView(makeSectionLabel("QUICK HUB", accent));
+        addMenuPairRow(hubCard,
+            "NOVA Shield", IC_SHIELD, () -> { dialog.dismiss(); showOrganizedShieldDashboard(); },
+            "Downloads", IC_DOWNLOAD, () -> { dialog.dismiss(); showTurboDownloadManager(); });
+        addMenuPairRow(hubCard,
+            "Temp Mail", IC_MAIL, () -> { dialog.dismiss(); showTempMailDialog(); },
+            "Themes & WP", IC_PALETTE, () -> { dialog.dismiss(); showCustomizeThemeDialog(); });
+        stack.addView(hubCard);
 
-        body.addView(sc);
-        dialog.show();
+        // Section 2: Current Page & Privacy
+        LinearLayout pageCard = createGlassCard();
+        pageCard.addView(makeSectionLabel("PAGE & PRIVACY", accent));
+        addMenuPairRow(pageCard,
+            isNoJsBypassActive ? "Bypass (No-JS)" : "Login Bypass", IC_UNLOCK, () -> { dialog.dismiss(); showLoginBypassDialog(wv); },
+            "Reader View", IC_BOOK, () -> { dialog.dismiss(); applyCleanReaderMode(wv); });
+        addMenuPairRow(pageCard,
+            "Desktop: " + (isDesktopMode ? "ON" : "OFF"), IC_DESKTOP, () -> { dialog.dismiss(); toggleDesktopMode(); },
+            "Private: " + (isIncognito ? "ON" : "OFF"), IC_PRIVATE, () -> { dialog.dismiss(); toggleIncognitoMode(); });
+        addMenuPairRow(pageCard,
+            "Find in Page", IC_SEARCH, () -> { dialog.dismiss(); layoutFind.setVisibility(View.VISIBLE); etFind.requestFocus(); },
+            "Share / QR", IC_SHARE, () -> { dialog.dismiss(); shareOrCopyUrl(wv); });
+        stack.addView(pageCard);
+
+        // Section 3: Library & Settings
+        LinearLayout moreCard = createGlassCard();
+        moreCard.addView(makeSectionLabel("LIBRARY & SYSTEM", accent));
+        addMenuPairRow(moreCard,
+            "History", IC_HISTORY, () -> { dialog.dismiss(); showHistoryDialog(); },
+            "Settings", IC_SETTINGS, () -> { dialog.dismiss(); showSettingsDialog(); });
+        stack.addView(moreCard);
+
+        Button btnDev = createGlassButton("About & Contact Developer", IC_USER, "#0072FF", "#4F46E5", "#FFFFFF");
+        btnDev.setOnClickListener(v -> { dialog.dismiss(); showAboutDeveloperDialog(); });
+        stack.addView(btnDev, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+
+        outer.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        showGlassModal(dialog, outer, false);
+    }
+
+    private void showSettingsDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        WebView wv = getCurrentWebView();
+        String accent = getAccentHex();
+
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("Browser Settings", IC_SETTINGS, dialog::dismiss));
+
+        LinearLayout card = createGlassCard();
+        card.addView(makeSectionLabel("PREFERENCES & PERFORMANCE", accent));
+        addMenuPairRow(card,
+            "Engine: " + searchEngineName, IC_SEARCH, () -> { dialog.dismiss(); showSearchEngineDialog(); },
+            "RAM (" + getRamUsageMb() + ")", IC_BOLT, () -> { dialog.dismiss(); showPerformanceOptimizerDialog(); });
+        addMenuPairRow(card,
+            "Zoom: " + textZoomPercent + "%", IC_BOOK, () -> { dialog.dismiss(); showZoomDialog(); },
+            "Data Saver: " + (isDataSaver ? "ON" : "OFF"), IC_IMAGE, () -> {
+                dialog.dismiss();
+                isDataSaver = !isDataSaver;
+                for (WebView tab : tabs) tab.getSettings().setBlockNetworkImage(isDataSaver);
+                if (wv != null) wv.reload();
+                Toast.makeText(this, "Data Saver " + (isDataSaver ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
+            });
+        addMenuPairRow(card,
+            "FullScreen: " + (isFullScreen ? "ON" : "OFF"), IC_DESKTOP, () -> { dialog.dismiss(); toggleFullScreen(); },
+            "Translate Page", IC_GLOBE, () -> {
+                dialog.dismiss();
+                if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
+                    wv.loadUrl("https://translate.google.com/translate?sl=auto&tl=en&u=" + Uri.encode(wv.getUrl()));
+                }
+            });
+        outer.addView(card);
+
+        Button btnClear = createGlassButton("Clear Cache, Cookies & History", IC_TRASH, "#33EF4444", "#1AEF4444", "#FCA5A5");
+        btnClear.setOnClickListener(v -> { dialog.dismiss(); clearBrowserData(wv); });
+        outer.addView(btnClear, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+
+        showGlassModal(dialog, outer, false);
+    }
+
+    private void addMenuPairRow(LinearLayout parent, String leftLabel, int leftIcon, Runnable leftAct,
+                                String rightLabel, int rightIcon, Runnable rightAct) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rLp.setMargins(0, 0, 0, dp(7));
+
+        Button b1 = createGlassButton(leftLabel, leftIcon, "#2BFFFFFF", "#12FFFFFF", "#F8FAFC");
+        b1.setOnClickListener(v -> leftAct.run());
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, dp(39), 1f);
+        lp1.setMargins(0, 0, dp(7), 0);
+        row.addView(b1, lp1);
+
+        Button b2 = createGlassButton(rightLabel, rightIcon, "#2BFFFFFF", "#12FFFFFF", "#F8FAFC");
+        b2.setOnClickListener(v -> rightAct.run());
+        row.addView(b2, new LinearLayout.LayoutParams(0, dp(39), 1f));
+
+        parent.addView(row, rLp);
     }
 
     // =========================================================================
-    // HONEST, TRANSPARENT PRIVACY SHIELD SHEET
+    // LIQUID GLASS NOVA SHIELD v5 DASHBOARD (VERIFIABLE ANALYTICS, ZERO EMOJIS)
     // =========================================================================
 
-    private void showShieldSheet() {
+    private void showOrganizedShieldDashboard() {
         WebView wv = getCurrentWebView();
         String currentUrl = (wv != null && wv.getUrl() != null) ? wv.getUrl() : "nova://home";
         String host = Uri.parse(currentUrl).getHost();
@@ -955,119 +1374,149 @@ public class MainActivity extends AppCompatActivity {
         boolean isHttps = currentUrl.startsWith("https://");
         int rulesLoaded = adHostHashes.length + trackerHostHashes.length;
 
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        String sub = isHome
-                ? "Local Home Page"
-                : host + "  •  " + (isHttps ? "HTTPS Encrypted" : "Unencrypted HTTP");
-        body.addView(makeSheetHeader("Privacy Shield", sub, dialog::dismiss));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("NOVA Shield v5", IC_SHIELD, dialog::dismiss));
 
-        // 3 Verifiable Real Metrics Row
-        LinearLayout metricsRow = new LinearLayout(this);
-        metricsRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mLp.setMargins(0, 0, 0, dp(12));
+        // Master Status Card
+        LinearLayout masterCard = createGlassCard();
+        TextView tvStatus = new TextView(this);
+        tvStatus.setText(isAdBlockEnabled
+                ? "ACTIVE  •  " + String.format(Locale.US, "%,d", rulesLoaded) + " Filter Rules"
+                : "PAUSED  •  Filtering Disabled");
+        tvStatus.setTextColor(Color.parseColor(isAdBlockEnabled ? "#00F5A0" : "#FB7185"));
+        tvStatus.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvStatus.setTextSize(13.5f);
+        masterCard.addView(tvStatus);
 
-        metricsRow.addView(makeMetricTile(String.valueOf(pageBlockedCount), "This Page", getAccentHex()),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        metricsRow.addView(makeMetricTile(String.valueOf(sessionBlockedCount), "This Session", null),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        metricsRow.addView(makeMetricTile(String.valueOf(adsBlockedCount + trackersBlockedCount), "Total Blocked", null),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        body.addView(metricsRow, mLp);
+        TextView tvSite = new TextView(this);
+        tvSite.setText(isHome
+                ? "Local Start Page  •  3rd-Party Cookies Blocked"
+                : host + "  •  " + (isHttps ? "HTTPS Encrypted" : "Unencrypted HTTP"));
+        tvSite.setTextColor(Color.parseColor("#CBD5E1"));
+        tvSite.setTextSize(12f);
+        tvSite.setPadding(0, dp(3), 0, dp(10));
+        masterCard.addView(tvSite);
 
-        // Controls List
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cLp.setMargins(0, 0, 0, dp(10));
-
-        controls.addView(makeListRow("Network Ad & Tracker Filter",
-                isAdBlockEnabled ? "ACTIVE" : "PAUSED",
-                isAdBlockEnabled ? "#22C55E" : "#F87171", () -> {
+        Button btnMaster = createGlassButton(
+                isAdBlockEnabled ? "Pause Shield Protection" : "Activate Shield Protection",
+                isAdBlockEnabled ? IC_PAUSE : IC_SHIELD,
+                isAdBlockEnabled ? "#33EF4444" : "#00B09B",
+                isAdBlockEnabled ? "#1AEF4444" : "#00F5A0",
+                isAdBlockEnabled ? "#FCA5A5" : "#041E15");
+        btnMaster.setOnClickListener(v -> {
             isAdBlockEnabled = !isAdBlockEnabled;
             prefs.edit().putBoolean("adblock_enabled", isAdBlockEnabled).apply();
-            applyCleanTheme();
+            applyLiquidGlassTheme();
             if (wv != null) wv.reload();
             dialog.dismiss();
-        }));
-        controls.addView(makeHairline());
-        controls.addView(makeListRow("Interstitial & Pop-Up Blocker",
-                isAggressiveInterstitialBlock ? "ON" : "OFF",
-                isAggressiveInterstitialBlock ? getAccentHex() : null, () -> {
+        });
+        masterCard.addView(btnMaster, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(39)));
+        outer.addView(masterCard);
+
+        // 3 Verifiable Live Analytics Cards
+        LinearLayout statsRow = new LinearLayout(this);
+        statsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams srLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        srLp.setMargins(0, 0, 0, dp(10));
+        statsRow.addView(makeMiniStatCard(String.valueOf(pageBlockedCount), "This Page", getAccentHex()),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        statsRow.addView(makeMiniStatCard(String.valueOf(sessionBlockedCount), "Session", "#FFFFFF"),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        statsRow.addView(makeMiniStatCard(String.valueOf(adsBlockedCount + trackersBlockedCount), "Total Blocked", "#00F5A0"),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        outer.addView(statsRow, srLp);
+
+        // Protection Modules & Sources Card
+        LinearLayout modCard = createGlassCard();
+        modCard.addView(makeSectionLabel("ACTIVE FILTER MODULES", getAccentHex()));
+
+        TextView tvMods = new TextView(this);
+        tvMods.setText("Lists: StevenBlack, HaGeZi Light, AdAway, Peter Lowe\n"
+                + "Index: 64-bit FNV-1a Hash Array (~1.4 MB Heap)\n"
+                + "YouTube & Spotify Ad Filtering: Enabled\n"
+                + "Interstitial & Pop-Up Blocker: " + (isAggressiveInterstitialBlock ? "Enabled" : "Disabled"));
+        tvMods.setTextColor(Color.parseColor("#CBD5E1"));
+        tvMods.setTextSize(11.8f);
+        tvMods.setLineSpacing(dp(2), 1f);
+        tvMods.setPadding(0, 0, 0, dp(9));
+        modCard.addView(tvMods);
+
+        Button btnTogglePop = createGlassButton(
+                isAggressiveInterstitialBlock ? "Pop-Up & Interstitial Killer: ON" : "Pop-Up & Interstitial Killer: OFF",
+                IC_BOLT, "#2B00D2FF", "#166366F1", "#E0F2FE");
+        btnTogglePop.setOnClickListener(v -> {
             isAggressiveInterstitialBlock = !isAggressiveInterstitialBlock;
             prefs.edit().putBoolean("aggressive_interstitial", isAggressiveInterstitialBlock).apply();
             if (wv != null) wv.reload();
             dialog.dismiss();
-        }));
+        });
+        modCard.addView(btnTogglePop, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        outer.addView(modCard);
+
+        LinearLayout bottomRow = new LinearLayout(this);
+        bottomRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnSync = createGlassButton("Update Lists", IC_RELOAD, "#2BFFFFFF", "#12FFFFFF", "#FFFFFF");
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(0, dp(39), 1f);
+        if (!isHome) sLp.setMargins(0, 0, dp(8), 0);
+        btnSync.setOnClickListener(v -> {
+            Toast.makeText(this, "Refreshing filter database...", Toast.LENGTH_SHORT).show();
+            loadCachedAndSyncFilterLists(true);
+            dialog.dismiss();
+        });
+        bottomRow.addView(btnSync, sLp);
+
         if (!isHome) {
-            boolean trusted = allowlistDomains.contains(host);
-            controls.addView(makeHairline());
-            controls.addView(makeListRow("Site Allowlist (" + host + ")",
-                    trusted ? "TRUSTED" : "FILTERED",
-                    trusted ? "#F59E0B" : null, () -> {
-                if (trusted) allowlistDomains.remove(host);
+            boolean allowlisted = allowlistDomains.contains(host);
+            Button btnAllow = createGlassButton(
+                    allowlisted ? "Untrust Site" : "Trust Site",
+                    IC_CHECK, "#33FFD000", "#1AFFD000", "#FFE566");
+            btnAllow.setOnClickListener(v -> {
+                if (allowlisted) allowlistDomains.remove(host);
                 else allowlistDomains.add(host);
                 prefs.edit().putStringSet("allowlist", allowlistDomains).apply();
                 if (wv != null) wv.reload();
                 dialog.dismiss();
-            }));
+            });
+            bottomRow.addView(btnAllow, new LinearLayout.LayoutParams(0, dp(39), 1f));
         }
-        body.addView(controls, cLp);
+        outer.addView(bottomRow);
 
-        // Transparent Filter Info Card
-        LinearLayout infoCard = makeCleanCard();
-        TextView tvInfo = new TextView(this);
-        tvInfo.setText("Active Rules: " + String.format(Locale.US, "%,d", rulesLoaded) + " domains (FNV-1a 64-bit index)\n"
-                + "Sources: StevenBlack Hosts, HaGeZi Light, AdAway, Peter Lowe\n"
-                + "Third-party cookies: Disabled by default");
-        tvInfo.setTextColor(colTextSecondary());
-        tvInfo.setTextSize(11.8f);
-        tvInfo.setLineSpacing(dp(2), 1f);
-        infoCard.addView(tvInfo);
-        body.addView(infoCard);
-
-        Button btnSync = makeSecondaryButton("Refresh Filter Lists", getAccentHex());
-        btnSync.setOnClickListener(v -> {
-            Toast.makeText(this, "Updating blocklists in background...", Toast.LENGTH_SHORT).show();
-            loadCachedAndSyncFilterLists(true);
-            dialog.dismiss();
-        });
-        body.addView(btnSync, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
-
-        dialog.show();
+        showGlassModal(dialog, outer, false);
     }
 
-    private LinearLayout makeMetricTile(String val, String label, String valueHex) {
+    private LinearLayout makeMiniStatCard(String value, String label, String colorHex) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
-        box.setPadding(dp(6), dp(10), dp(6), dp(10));
-        box.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
+        box.setPadding(dp(6), dp(9), dp(6), dp(9));
+        box.setBackground(makeGlassDrawable(
+                Color.parseColor("#B8162544"),
+                Color.parseColor("#B80B1426"),
+                Color.parseColor("#44FFFFFF"),
+                13, 1));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(dp(3), 0, dp(3), 0);
 
-        TextView tvV = new TextView(this);
-        tvV.setText(val);
-        tvV.setTextColor(valueHex != null ? Color.parseColor(valueHex) : colTextPrimary());
-        tvV.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        tvV.setTextSize(16f);
-        tvV.setGravity(Gravity.CENTER);
-        box.addView(tvV);
+        TextView tvVal = new TextView(this);
+        tvVal.setText(value);
+        tvVal.setTextColor(Color.parseColor(colorHex));
+        tvVal.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvVal.setTextSize(15f);
+        tvVal.setGravity(Gravity.CENTER);
+        box.addView(tvVal);
 
-        TextView tvL = new TextView(this);
-        tvL.setText(label);
-        tvL.setTextColor(colTextSecondary());
-        tvL.setTextSize(11f);
-        tvL.setGravity(Gravity.CENTER);
-        tvL.setPadding(0, dp(2), 0, 0);
-        box.addView(tvL);
+        TextView tvLbl = new TextView(this);
+        tvLbl.setText(label);
+        tvLbl.setTextColor(Color.parseColor("#CBD5E1"));
+        tvLbl.setTextSize(10.5f);
+        tvLbl.setGravity(Gravity.CENTER);
+        box.addView(tvLbl);
 
         LinearLayout holder = new LinearLayout(this);
         holder.addView(box, lp);
@@ -1075,7 +1524,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // UPGRADED 4-MODE LOGIN / SIGN-UP WALL BYPASS ENGINE
+    // UPGRADED 4-MODE LOGIN / SIGN-UP WALL BYPASS (LIQUID GLASS MODAL)
     // =========================================================================
 
     private void resetTabNoJsMode(WebView wv) {
@@ -1085,30 +1534,35 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showLoginBypassSheet(WebView wv) {
+    private void showLoginBypassDialog(WebView wv) {
         if (wv == null || wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser")) {
             Toast.makeText(this, "Open a website first to bypass a login wall", Toast.LENGTH_SHORT).show();
             return;
         }
         final String currentUrl = wv.getUrl();
 
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Bypass Login & Paywalls", Uri.parse(currentUrl).getHost(), dialog::dismiss));
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("Login & Wall Bypass", IC_UNLOCK, dialog::dismiss));
 
-        list.addView(makeListRow("1. Remove Modals, Blur & Unlock Scroll", "Persistent", getAccentHex(), () -> {
+        LinearLayout card = createGlassCard();
+        card.addView(makeSectionLabel("SELECT BYPASS METHOD", getAccentHex()));
+
+        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        bLp.setMargins(0, 0, 0, dp(7));
+
+        Button b1 = createGlassButton("1. Persistent Modal, Blur & Scroll Unlock", IC_UNLOCK, "#0072FF", "#00C6FF", "#FFFFFF");
+        b1.setOnClickListener(v -> {
             dialog.dismiss();
             injectPersistentWallBypass(wv);
-            Toast.makeText(this, "Overlay & scroll-lock killer active on this page", Toast.LENGTH_SHORT).show();
-        }));
-        list.addView(makeHairline());
+            Toast.makeText(this, "Persistent overlay & scroll-lock killer active", Toast.LENGTH_SHORT).show();
+        });
+        card.addView(b1, bLp);
 
-        list.addView(makeListRow("2. Reload via Google Referer (Fresh Session)", "Article Wall", null, () -> {
+        Button b2 = createGlassButton("2. Reload via Google Referer (Fresh Cookies)", IC_RELOAD, "#2BFFFFFF", "#12FFFFFF", "#F8FAFC");
+        b2.setOnClickListener(v -> {
             dialog.dismiss();
             CookieManager.getInstance().removeSessionCookies(null);
             CookieManager.getInstance().flush();
@@ -1116,12 +1570,16 @@ public class MainActivity extends AppCompatActivity {
             headers.put("Referer", "https://www.google.com/");
             wv.loadUrl(currentUrl, headers);
             Toast.makeText(this, "Reloading with Google referer...", Toast.LENGTH_SHORT).show();
-        }));
-        list.addView(makeHairline());
+        });
+        card.addView(b2, bLp);
 
-        list.addView(makeListRow("3. No-JavaScript Mode (Defeats JS Walls)",
-                isNoJsBypassActive ? "ON (Tap to Restore)" : "OFF",
-                isNoJsBypassActive ? "#F59E0B" : null, () -> {
+        Button b3 = createGlassButton(
+                isNoJsBypassActive ? "3. No-JavaScript Mode: ON (Tap to Restore)" : "3. No-JavaScript Mode (Defeats JS Gates)",
+                IC_BOLT,
+                isNoJsBypassActive ? "#33FFD000" : "#2BFFFFFF",
+                isNoJsBypassActive ? "#1AFFD000" : "#12FFFFFF",
+                isNoJsBypassActive ? "#FFE566" : "#F8FAFC");
+        b3.setOnClickListener(v -> {
             dialog.dismiss();
             isNoJsBypassActive = !isNoJsBypassActive;
             wv.getSettings().setJavaScriptEnabled(!isNoJsBypassActive);
@@ -1129,16 +1587,18 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, isNoJsBypassActive
                     ? "JavaScript disabled for this page"
                     : "JavaScript restored", Toast.LENGTH_SHORT).show();
-        }));
-        list.addView(makeHairline());
+        });
+        card.addView(b3, bLp);
 
-        list.addView(makeListRow("4. Clean Reader View (Extract Text)", "Instant", null, () -> {
+        Button b4 = createGlassButton("4. Clean Reader Extractor", IC_BOOK, "#2BFFFFFF", "#12FFFFFF", "#F8FAFC");
+        b4.setOnClickListener(v -> {
             dialog.dismiss();
             applyCleanReaderMode(wv);
-        }));
+        });
+        card.addView(b4, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
 
-        body.addView(list);
-        dialog.show();
+        outer.addView(card);
+        showGlassModal(dialog, outer, false);
     }
 
     private void injectPersistentWallBypass(WebView wv) {
@@ -1183,8 +1643,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void applyCleanReaderMode(WebView wv) {
         if (wv == null) return;
-        String bg = isLightTheme() ? "#FFFFFF" : "#0B0F17";
-        String fg = isLightTheme() ? "#0F172A" : "#E2E8F0";
+        String bg = THEME_FROST.equals(currentTheme) ? "#FFFFFF" : "#0B1224";
+        String fg = THEME_FROST.equals(currentTheme) ? "#0F172A" : "#F8FAFC";
         String js = "javascript:(function(){"
             + "try{"
             + "var root=document.querySelector('article,main,[role=\"main\"],.post-content,.article-body')||document.body;"
@@ -1215,77 +1675,72 @@ public class MainActivity extends AppCompatActivity {
     // RELIABLE 4-ENGINE TEMP MAIL (TEMPMAIL.LOL v2 -> MAIL.TM -> MAIL.GW -> GUERRILLA)
     // =========================================================================
 
-    private void showTempMailSheet() {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, true);
+    private void showTempMailDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        body.addView(makeSheetHeader("Temporary Email", "Disposable inbox with automatic provider failover", dialog::dismiss));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("NOVA Temp Mail", IC_MAIL, dialog::dismiss));
 
-        LinearLayout addrCard = makeCleanCard();
+        LinearLayout addrCard = createGlassCard();
         TextView tvProv = new TextView(this);
         String prov = prefs.getString("tm_provider_v2", "");
-        tvProv.setText(prov.isEmpty() ? "ACTIVE ADDRESS" : "ACTIVE ADDRESS  •  " + prov.toUpperCase(Locale.US));
-        tvProv.setTextColor(colTextSecondary());
+        tvProv.setText(prov.isEmpty() ? "DISPOSABLE ADDRESS" : "DISPOSABLE ADDRESS  •  " + prov.toUpperCase(Locale.US));
+        tvProv.setTextColor(Color.parseColor("#94A3B8"));
         tvProv.setTextSize(10.5f);
         tvProv.setLetterSpacing(0.05f);
         addrCard.addView(tvProv);
 
         TextView tvEmail = new TextView(this);
         String savedEmail = prefs.getString("tm_addr_v2", "");
-        tvEmail.setText(savedEmail.isEmpty() ? "Generating address..." : savedEmail);
+        tvEmail.setText(savedEmail.isEmpty() ? "Generating unique address..." : savedEmail);
         tvEmail.setTextColor(Color.parseColor(getAccentHex()));
         tvEmail.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        tvEmail.setTextSize(15f);
+        tvEmail.setTextSize(14.5f);
         tvEmail.setPadding(0, dp(4), 0, dp(10));
         addrCard.addView(tvEmail);
 
         LinearLayout btnRow = new LinearLayout(this);
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button btnCopy = makePrimaryButton("Copy Address");
-        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(36), 1f);
+        Button btnCopy = createGlassButton("Copy Address", IC_COPY, "#0072FF", "#00C6FF", "#FFFFFF");
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
         cLp.setMargins(0, 0, dp(8), 0);
         btnCopy.setOnClickListener(v -> {
             String em = prefs.getString("tm_addr_v2", "");
             if (!em.isEmpty()) {
                 ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cb != null) {
-                    cb.setPrimaryClip(ClipData.newPlainText("Temp Mail", em));
+                    cb.setPrimaryClip(ClipData.newPlainText("NOVA Temp Mail", em));
                     Toast.makeText(this, "Copied: " + em, Toast.LENGTH_SHORT).show();
                 }
             }
         });
         btnRow.addView(btnCopy, cLp);
 
-        Button btnNew = makeSecondaryButton("New Address", null);
-        btnRow.addView(btnNew, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        Button btnNew = createGlassButton("New Email", IC_RELOAD, "#33FFFFFF", "#1AFFFFFF", "#FFFFFF");
+        btnRow.addView(btnNew, new LinearLayout.LayoutParams(0, dp(38), 1f));
         addrCard.addView(btnRow);
-        body.addView(addrCard);
+        outer.addView(addrCard);
 
         LinearLayout inboxHdr = new LinearLayout(this);
         inboxHdr.setOrientation(LinearLayout.HORIZONTAL);
         inboxHdr.setGravity(Gravity.CENTER_VERTICAL);
         inboxHdr.setPadding(dp(2), dp(2), dp(2), dp(8));
 
-        TextView tvInboxTitle = new TextView(this);
-        tvInboxTitle.setText("INBOX MESSAGES");
-        tvInboxTitle.setTextColor(colTextSecondary());
-        tvInboxTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        tvInboxTitle.setTextSize(11f);
-        tvInboxTitle.setLetterSpacing(0.06f);
-        inboxHdr.addView(tvInboxTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvInboxLbl = makeSectionLabel("LIVE INBOX (OTPs & LINKS)", getAccentHex());
+        inboxHdr.addView(tvInboxLbl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        Button btnRefresh = makeSecondaryButton("Refresh", getAccentHex());
-        inboxHdr.addView(btnRefresh, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
-        body.addView(inboxHdr);
+        Button btnRefresh = createGlassButton("Refresh", IC_RELOAD, "#2B00D2FF", "#166366F1", "#E0F2FE");
+        inboxHdr.addView(btnRefresh, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34)));
+        outer.addView(inboxHdr);
 
         ScrollView scInbox = new ScrollView(this);
         scInbox.setVerticalScrollBarEnabled(false);
         LinearLayout inboxContainer = new LinearLayout(this);
         inboxContainer.setOrientation(LinearLayout.VERTICAL);
         scInbox.addView(inboxContainer);
-        body.addView(scInbox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        outer.addView(scInbox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         Runnable refreshAction = () -> fetchTempMailInbox(tvEmail, tvProv, inboxContainer);
         btnRefresh.setOnClickListener(v -> refreshAction.run());
@@ -1297,16 +1752,16 @@ public class MainActivity extends AppCompatActivity {
             refreshAction.run();
         }
 
-        dialog.show();
+        showGlassModal(dialog, outer, true);
     }
 
-    private String httpMailApi(String urlStr, String method, String jsonBody, String bearerToken, String acceptHeader) throws Exception {
+    private String httpMailApi(String urlStr, String method, String jsonBody, String bearerToken) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setRequestMethod(method);
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(12000);
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36");
-        conn.setRequestProperty("Accept", acceptHeader != null ? acceptHeader : "application/json");
+        conn.setRequestProperty("Accept", "application/json");
         if (bearerToken != null && !bearerToken.isEmpty()) {
             conn.setRequestProperty("Authorization", "Bearer " + bearerToken);
         }
@@ -1333,27 +1788,24 @@ public class MainActivity extends AppCompatActivity {
 
     private void createFreshTempMailAccount(TextView tvEmail, TextView tvProv, LinearLayout inboxContainer) {
         uiHandler.post(() -> {
-            tvEmail.setText("Connecting...");
+            tvEmail.setText("Connecting to mail server...");
             inboxContainer.removeAllViews();
         });
-
         new Thread(() -> {
-            // Engine 1: TempMail.lol v2 (Fast, rotating domains, zero signup)
+            // Engine 1: tempmail.lol v2
             try {
-                String res = httpMailApi("https://api.tempmail.lol/v2/inbox/create", "POST", "{}", null, "application/json");
+                String res = httpMailApi("https://api.tempmail.lol/v2/inbox/create", "POST", "{}", null);
                 JSONObject obj = new JSONObject(res);
-                String email = obj.getString("address");
-                String token = obj.getString("token");
-                saveTempMailSession("tempmail.lol", email, token, tvEmail, tvProv, inboxContainer);
+                saveTempMailSession("tempmail.lol", obj.getString("address"), obj.getString("token"), tvEmail, tvProv, inboxContainer);
                 return;
             } catch (Exception ignored) {}
 
-            // Engine 2 & 3: Mail.tm & Mail.gw
+            // Engine 2 & 3: mail.tm and mail.gw
             String[] bases = {"https://api.mail.tm", "https://api.mail.gw"};
             String[] names = {"mail.tm", "mail.gw"};
             for (int i = 0; i < bases.length; i++) {
                 try {
-                    String domStr = httpMailApi(bases[i] + "/domains", "GET", null, null, "application/json").trim();
+                    String domStr = httpMailApi(bases[i] + "/domains", "GET", null, null).trim();
                     JSONArray arr = domStr.startsWith("[")
                             ? new JSONArray(domStr)
                             : new JSONObject(domStr).getJSONArray("hydra:member");
@@ -1370,28 +1822,24 @@ public class MainActivity extends AppCompatActivity {
                     creds.put("address", email);
                     creds.put("password", pass);
 
-                    httpMailApi(bases[i] + "/accounts", "POST", creds.toString(), null, "application/json");
-                    String tokJson = httpMailApi(bases[i] + "/token", "POST", creds.toString(), null, "application/json");
-                    String token = new JSONObject(tokJson).getString("token");
-
-                    saveTempMailSession(names[i], email, token, tvEmail, tvProv, inboxContainer);
+                    httpMailApi(bases[i] + "/accounts", "POST", creds.toString(), null);
+                    String tokJson = httpMailApi(bases[i] + "/token", "POST", creds.toString(), null);
+                    saveTempMailSession(names[i], email, new JSONObject(tokJson).getString("token"), tvEmail, tvProv, inboxContainer);
                     return;
                 } catch (Exception ignored) {}
             }
 
-            // Engine 4: Guerrilla Mail fallback
+            // Engine 4: Guerrilla Mail
             try {
-                String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=get_email_address&lang=en", "GET", null, null, "application/json");
+                String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=get_email_address&lang=en", "GET", null, null);
                 JSONObject obj = new JSONObject(res);
-                String email = obj.getString("email_addr");
-                String sid = obj.getString("sid_token");
-                saveTempMailSession("guerrillamail", email, sid, tvEmail, tvProv, inboxContainer);
+                saveTempMailSession("guerrillamail", obj.getString("email_addr"), obj.getString("sid_token"), tvEmail, tvProv, inboxContainer);
                 return;
             } catch (Exception ignored) {}
 
             uiHandler.post(() -> {
-                tvEmail.setText("Connection failed — tap New Address");
-                tvProv.setText("OFFLINE OR RATE-LIMITED");
+                tvEmail.setText("Servers busy — tap New Email");
+                tvProv.setText("CONNECTION FAILED");
             });
         }).start();
     }
@@ -1405,7 +1853,7 @@ public class MainActivity extends AppCompatActivity {
             .apply();
         uiHandler.post(() -> {
             tvEmail.setText(email);
-            tvProv.setText("ACTIVE ADDRESS  •  " + provider.toUpperCase(Locale.US));
+            tvProv.setText("DISPOSABLE ADDRESS  •  " + provider.toUpperCase(Locale.US));
             fetchTempMailInbox(tvEmail, tvProv, inboxContainer);
         });
     }
@@ -1418,10 +1866,10 @@ public class MainActivity extends AppCompatActivity {
         uiHandler.post(() -> {
             inboxContainer.removeAllViews();
             TextView tvLoad = new TextView(this);
-            tvLoad.setText("Checking inbox...");
-            tvLoad.setTextColor(colTextSecondary());
-            tvLoad.setTextSize(13f);
-            tvLoad.setPadding(dp(4), dp(12), dp(4), dp(12));
+            tvLoad.setText("Refreshing inbox...");
+            tvLoad.setTextColor(Color.parseColor("#94A3B8"));
+            tvLoad.setTextSize(12.5f);
+            tvLoad.setPadding(dp(6), dp(10), dp(6), dp(10));
             inboxContainer.addView(tvLoad);
         });
 
@@ -1429,11 +1877,9 @@ public class MainActivity extends AppCompatActivity {
             try {
                 final List<TempMailItem> items = new ArrayList<>();
                 if ("tempmail.lol".equals(provider)) {
-                    String res = httpMailApi("https://api.tempmail.lol/v2/inbox?token=" + Uri.encode(token), "GET", null, null, "application/json");
+                    String res = httpMailApi("https://api.tempmail.lol/v2/inbox?token=" + Uri.encode(token), "GET", null, null);
                     JSONObject obj = new JSONObject(res);
-                    if (obj.optBoolean("expired", false)) {
-                        throw new IOException("EXPIRED");
-                    }
+                    if (obj.optBoolean("expired", false)) throw new IOException("EXPIRED");
                     JSONArray arr = obj.optJSONArray("emails");
                     if (arr != null) {
                         for (int i = 0; i < arr.length(); i++) {
@@ -1443,17 +1889,14 @@ public class MainActivity extends AppCompatActivity {
                             item.subject = m.optString("subject", "(No Subject)");
                             item.from = m.optString("from", "Sender");
                             String plain = m.optString("body", "");
-                            if (plain.isEmpty()) {
-                                String h = m.optString("html", "");
-                                plain = stripHtml(h);
-                            }
+                            if (plain.isEmpty()) plain = stripHtml(m.optString("html", ""));
                             item.inlineBody = plain;
                             item.excerpt = plain.length() > 90 ? plain.substring(0, 90).replace('\n', ' ') + "..." : plain.replace('\n', ' ');
                             items.add(item);
                         }
                     }
                 } else if ("guerrillamail".equals(provider)) {
-                    String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=get_email_list&offset=0&sid_token=" + Uri.encode(token), "GET", null, null, "application/json");
+                    String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=get_email_list&offset=0&sid_token=" + Uri.encode(token), "GET", null, null);
                     JSONArray list = new JSONObject(res).optJSONArray("list");
                     if (list != null) {
                         for (int i = 0; i < list.length(); i++) {
@@ -1468,7 +1911,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 } else {
                     String base = "mail.gw".equals(provider) ? "https://api.mail.gw" : "https://api.mail.tm";
-                    String res = httpMailApi(base + "/messages", "GET", null, token, "application/json").trim();
+                    String res = httpMailApi(base + "/messages", "GET", null, token).trim();
                     JSONArray msgs = res.startsWith("[")
                             ? new JSONArray(res)
                             : new JSONObject(res).getJSONArray("hydra:member");
@@ -1486,28 +1929,28 @@ public class MainActivity extends AppCompatActivity {
                 uiHandler.post(() -> {
                     inboxContainer.removeAllViews();
                     if (items.isEmpty()) {
-                        LinearLayout empty = makeCleanCard();
+                        LinearLayout empty = createGlassCard();
                         TextView tvE = new TextView(this);
-                        tvE.setText("No messages yet. Copy your address above, use it on a signup form, and tap Refresh to view incoming emails or verification codes.");
-                        tvE.setTextColor(colTextSecondary());
-                        tvE.setTextSize(12.5f);
+                        tvE.setText("Inbox is empty.\nCopy your address above, use it on a signup form, and tap Refresh to read OTPs or verification links.");
+                        tvE.setTextColor(Color.parseColor("#CBD5E1"));
+                        tvE.setTextSize(12.2f);
                         empty.addView(tvE);
                         inboxContainer.addView(empty);
                         return;
                     }
                     for (TempMailItem m : items) {
-                        LinearLayout card = makeCleanCard();
+                        LinearLayout card = createGlassCard();
                         TextView tvS = new TextView(this);
                         tvS.setText(m.subject);
-                        tvS.setTextColor(colTextPrimary());
+                        tvS.setTextColor(Color.parseColor("#FFFFFF"));
                         tvS.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
                         tvS.setTextSize(13.5f);
                         card.addView(tvS);
 
                         TextView tvF = new TextView(this);
-                        tvF.setText(m.from + (m.excerpt.isEmpty() ? "" : "\n" + m.excerpt));
-                        tvF.setTextColor(colTextSecondary());
-                        tvF.setTextSize(12f);
+                        tvF.setText("From: " + m.from + (m.excerpt.isEmpty() ? "" : "\n" + m.excerpt));
+                        tvF.setTextColor(Color.parseColor("#CBD5E1"));
+                        tvF.setTextSize(11.5f);
                         tvF.setPadding(0, dp(3), 0, 0);
                         card.addView(tvF);
 
@@ -1518,13 +1961,13 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 uiHandler.post(() -> {
                     inboxContainer.removeAllViews();
-                    LinearLayout errCard = makeCleanCard();
+                    LinearLayout err = createGlassCard();
                     TextView tvErr = new TextView(this);
-                    tvErr.setText("Session expired or server unavailable. Tap New Address to generate a fresh mailbox.");
-                    tvErr.setTextColor(Color.parseColor("#F59E0B"));
-                    tvErr.setTextSize(12.5f);
-                    errCard.addView(tvErr);
-                    inboxContainer.addView(errCard);
+                    tvErr.setText("Session expired or server unavailable. Tap New Email to start a fresh mailbox.");
+                    tvErr.setTextColor(Color.parseColor("#FFD000"));
+                    tvErr.setTextSize(12.2f);
+                    err.addView(tvErr);
+                    inboxContainer.addView(err);
                 });
             }
         }).start();
@@ -1546,16 +1989,14 @@ public class MainActivity extends AppCompatActivity {
             try {
                 String bodyText;
                 if ("guerrillamail".equals(provider)) {
-                    String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=fetch_email&email_id=" + Uri.encode(item.id) + "&sid_token=" + Uri.encode(token), "GET", null, null, "application/json");
+                    String res = httpMailApi("https://api.guerrillamail.com/ajax.php?f=fetch_email&email_id=" + Uri.encode(item.id) + "&sid_token=" + Uri.encode(token), "GET", null, null);
                     bodyText = stripHtml(new JSONObject(res).optString("mail_body", ""));
                 } else {
                     String base = "mail.gw".equals(provider) ? "https://api.mail.gw" : "https://api.mail.tm";
-                    String res = httpMailApi(base + "/messages/" + item.id, "GET", null, token, "application/json");
+                    String res = httpMailApi(base + "/messages/" + item.id, "GET", null, token);
                     JSONObject obj = new JSONObject(res);
                     bodyText = obj.optString("text", "");
-                    if (bodyText.isEmpty() && obj.has("html")) {
-                        bodyText = stripHtml(obj.optString("html", ""));
-                    }
+                    if (bodyText.isEmpty() && obj.has("html")) bodyText = stripHtml(obj.optString("html", ""));
                 }
                 final String finalBody = bodyText.isEmpty() ? "(Empty message)" : bodyText.trim();
                 uiHandler.post(() -> showTempMailReaderDialog(item.subject, item.from, finalBody));
@@ -1580,7 +2021,7 @@ public class MainActivity extends AppCompatActivity {
             b.setPositiveButton("Copy Code (" + otpCode + ")", (d, w) -> {
                 ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cb != null) {
-                    cb.setPrimaryClip(ClipData.newPlainText("Verification Code", otpCode));
+                    cb.setPrimaryClip(ClipData.newPlainText("OTP Code", otpCode));
                     Toast.makeText(this, "Code copied: " + otpCode, Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1604,24 +2045,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // APPEARANCE, THEMES & WALLPAPER BOTTOM SHEET
+    // VIBRANT LIQUID GLASS THEMES & WALLPAPER CUSTOMIZATION
     // =========================================================================
 
-    private void showCustomizeThemeSheet() {
+    private void showCustomizeThemeDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("Themes & Wallpapers", IC_PALETTE, dialog::dismiss));
+
+        ScrollView sc = new ScrollView(this);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Appearance", "Select a color palette or homepage wallpaper", dialog::dismiss));
+        sc.addView(body);
 
-        body.addView(makeSmallLabel("Color Themes"));
+        LinearLayout themeCard = createGlassCard();
+        themeCard.addView(makeSectionLabel("VIBRANT LIQUID GLASS PALETTES", getAccentHex()));
 
         String[][] themes = {
-            {"Obsidian Dark", THEME_OBSIDIAN, "#121826", "#F8FAFC"},
-            {"AMOLED Black", THEME_AMOLED, "#000000", "#38BDF8"},
-            {"Nordic Slate", THEME_SLATE, "#1E293B", "#F8FAFC"},
-            {"Deep Indigo", THEME_INDIGO, "#1D203D", "#E0E7FF"},
-            {"Pine Forest", THEME_FOREST, "#122B24", "#D1FAE5"},
-            {"Clean Light", THEME_LIGHT, "#F1F5F9", "#0F172A"}
+            {"Electric Sapphire", THEME_SAPPHIRE, "#0072FF", "#00C6FF", "#FFFFFF"},
+            {"AMOLED Neon", THEME_AMOLED, "#0D1117", "#000000", "#00E5FF"},
+            {"Neon Cyberpunk", THEME_CYBERPUNK, "#7B2FF7", "#F107A3", "#FFFFFF"},
+            {"Solar Sunset", THEME_SUNSET, "#FF512F", "#F09819", "#FFFFFF"},
+            {"Cyber Emerald", THEME_EMERALD, "#00B09B", "#00F5A0", "#052018"},
+            {"Crystal Frost", THEME_FROST, "#E0F2FE", "#BAE6FD", "#0F172A"}
         };
 
         for (int i = 0; i < themes.length; i += 2) {
@@ -1629,60 +2077,57 @@ public class MainActivity extends AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rLp.setMargins(0, 0, 0, dp(8));
+            rLp.setMargins(0, 0, 0, dp(7));
 
             for (int j = 0; j < 2 && (i + j) < themes.length; j++) {
                 final String label = themes[i + j][0];
                 final String key = themes[i + j][1];
-                final String bgHex = themes[i + j][2];
-                final String txtHex = themes[i + j][3];
-                boolean active = currentTheme.equals(key);
+                final String c1 = themes[i + j][2];
+                final String c2 = themes[i + j][3];
+                final String txtCol = themes[i + j][4];
+                boolean isSel = currentTheme.equals(key);
 
-                Button btn = new Button(this);
-                btn.setText(active ? label + "  ✓" : label);
-                btn.setAllCaps(false);
-                btn.setTextSize(12.5f);
-                btn.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-                btn.setTextColor(Color.parseColor(txtHex));
-                btn.setBackground(makeRoundedBg(
-                        Color.parseColor(bgHex),
-                        active ? Color.parseColor(getAccentHex()) : colBorder(),
-                        10, active ? 2 : 1));
-                btn.setMinHeight(0);
-                btn.setMinimumHeight(0);
+                Button btn = createGlassButton(label, isSel ? IC_CHECK : 0, c1, c2, txtCol);
+                LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+                if (j == 0) bLp.setMargins(0, 0, dp(7), 0);
                 btn.setOnClickListener(v -> {
                     currentTheme = key;
-                    prefs.edit().putString("nova_theme_v45", key).apply();
-                    applyCleanTheme();
+                    prefs.edit().putString("nova_theme", key).apply();
+                    applyLiquidGlassTheme();
                     WebView wv = getCurrentWebView();
                     if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
                         loadNovaHome(wv);
                     }
                     dialog.dismiss();
+                    Toast.makeText(this, "Theme Applied: " + label, Toast.LENGTH_SHORT).show();
                 });
-
-                LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, dp(40), 1f);
-                if (j == 0) bLp.setMargins(0, 0, dp(8), 0);
                 row.addView(btn, bLp);
             }
-            body.addView(row, rLp);
+            themeCard.addView(row, rLp);
         }
+        body.addView(themeCard);
 
-        body.addView(makeSmallLabel("Homepage Wallpaper"));
-        LinearLayout wpRow = new LinearLayout(this);
-        wpRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout wpCard = createGlassCard();
+        wpCard.addView(makeSectionLabel("CUSTOM HOMEPAGE WALLPAPER", getAccentHex()));
 
-        Button btnPick = makePrimaryButton("Choose Image");
-        LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
-        pLp.setMargins(0, 0, dp(8), 0);
-        btnPick.setOnClickListener(v -> {
+        TextView tvWpSub = new TextView(this);
+        tvWpSub.setText("Pick any image from your phone gallery to glow behind the frosted Liquid Glass home screen.");
+        tvWpSub.setTextColor(Color.parseColor("#CBD5E1"));
+        tvWpSub.setTextSize(12f);
+        tvWpSub.setPadding(0, 0, 0, dp(10));
+        wpCard.addView(tvWpSub);
+
+        Button btnPickWp = createGlassButton("Choose Image from Gallery", IC_IMAGE, "#0072FF", "#00C6FF", "#FFFFFF");
+        LinearLayout.LayoutParams pickLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        pickLp.setMargins(0, 0, 0, dp(7));
+        btnPickWp.setOnClickListener(v -> {
             dialog.dismiss();
             wallpaperPickerLauncher.launch("image/*");
         });
-        wpRow.addView(btnPick, pLp);
+        wpCard.addView(btnPickWp, pickLp);
 
-        Button btnReset = makeSecondaryButton("Reset Default", "#F87171");
-        btnReset.setOnClickListener(v -> {
+        Button btnClearWp = createGlassButton("Reset Wallpaper", IC_TRASH, "#33EF4444", "#1AEF4444", "#FCA5A5");
+        btnClearWp.setOnClickListener(v -> {
             File wpFile = new File(getFilesDir(), "nova_home_wallpaper.b64");
             if (wpFile.exists()) wpFile.delete();
             Toast.makeText(this, "Wallpaper reset", Toast.LENGTH_SHORT).show();
@@ -1692,10 +2137,11 @@ public class MainActivity extends AppCompatActivity {
             }
             dialog.dismiss();
         });
-        wpRow.addView(btnReset, new LinearLayout.LayoutParams(0, dp(38), 1f));
-        body.addView(wpRow);
+        wpCard.addView(btnClearWp, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        body.addView(wpCard);
 
-        dialog.show();
+        outer.addView(sc);
+        showGlassModal(dialog, outer, false);
     }
 
     private void saveCustomWallpaperFromUri(Uri uri) {
@@ -1720,7 +2166,7 @@ public class MainActivity extends AppCompatActivity {
                     fw.write(b64);
                 }
                 uiHandler.post(() -> {
-                    Toast.makeText(this, "Wallpaper updated", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Custom wallpaper applied", Toast.LENGTH_SHORT).show();
                     WebView wv = getCurrentWebView();
                     if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
                         loadNovaHome(wv);
@@ -1747,93 +2193,101 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // CLEAN MINIMALIST HOMEPAGE (ZERO EMOJIS, CRISP SVG ICONS, REAL METRICS)
+    // LIQUID GLASS HOMEPAGE WITH REAL DRAWN INLINE SVG BRAND LOGOS (ZERO EMOJIS)
     // =========================================================================
 
     private void loadNovaHome(WebView webView) {
         int rulesCount = adHostHashes.length + trackerHostHashes.length;
         String accent = getAccentHex();
-        boolean light = isLightTheme();
+        String accent2 = getSecondaryAccentHex();
+        boolean isLight = THEME_FROST.equals(currentTheme);
 
         String customWpB64 = readCustomWallpaperBase64();
         String bgCss;
         if (customWpB64 != null && !customWpB64.isEmpty()) {
-            bgCss = "linear-gradient(rgba(11,15,23,0.62),rgba(11,15,23,0.78)),url('data:image/jpeg;base64," + customWpB64 + "') center/cover no-repeat fixed";
+            bgCss = "linear-gradient(rgba(5,10,22,0.48),rgba(5,10,22,0.68)),url('data:image/jpeg;base64," + customWpB64 + "') center/cover no-repeat fixed";
         } else if (THEME_AMOLED.equals(currentTheme)) {
             bgCss = "#000000";
-        } else if (THEME_SLATE.equals(currentTheme)) {
-            bgCss = "#0F172A";
-        } else if (THEME_INDIGO.equals(currentTheme)) {
-            bgCss = "#0C0D1D";
-        } else if (THEME_FOREST.equals(currentTheme)) {
-            bgCss = "#071310";
-        } else if (light) {
-            bgCss = "#F8FAFC";
+        } else if (THEME_CYBERPUNK.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 18% 12%, #6D28D9 0%, #26074F 48%, #0E021F 100%)";
+        } else if (THEME_SUNSET.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 18% 12%, #C2410C 0%, #431407 48%, #160502 100%)";
+        } else if (THEME_EMERALD.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 18% 12%, #059669 0%, #042F25 48%, #01140F 100%)";
+        } else if (isLight) {
+            bgCss = "radial-gradient(circle at 20% 15%, #BAE6FD 0%, #E0F2FE 55%, #F0F9FF 100%)";
         } else {
-            bgCss = "#0B0F17";
+            bgCss = "radial-gradient(circle at 18% 12%, #1D4ED8 0%, #0B1F54 48%, #050C24 100%)";
         }
 
-        boolean darkText = light && customWpB64 == null;
-        String cardBg = darkText ? "#FFFFFF" : "rgba(22, 30, 46, 0.86)";
-        String border = darkText ? "#E2E8F0" : "rgba(148, 163, 184, 0.18)";
-        String text = darkText ? "#0F172A" : "#F8FAFC";
-        String muted = darkText ? "#64748B" : "#94A3B8";
+        boolean darkText = isLight && customWpB64 == null;
+        String glass = darkText ? "rgba(255,255,255,0.74)" : "rgba(255,255,255,0.10)";
+        String border = darkText ? "rgba(0,102,255,0.26)" : "rgba(255,255,255,0.22)";
+        String text = darkText ? "#0F172A" : "#FFFFFF";
+        String sub = darkText ? "#475569" : "#CBD5E1";
+
+        // Real Crisp Inline SVG Logos for Shortcuts & Quick Actions
+        String svgGoogle = "<svg viewBox='0 0 24 24' width='24' height='24'><path fill='#4285F4' d='M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z'/><path fill='#34A853' d='M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z'/><path fill='#FBBC05' d='M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z'/><path fill='#EA4335' d='M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z'/></svg>";
+        String svgYoutube = "<svg viewBox='0 0 24 24' width='24' height='24'><rect x='2' y='5' width='20' height='14' rx='4' fill='#FF1E1E'/><polygon points='10,8.5 16,12 10,15.5' fill='#FFFFFF'/></svg>";
+        String svgSpotify = "<svg viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='#1DB954'/><path fill='none' stroke='#04140A' stroke-width='1.9' stroke-linecap='round' d='M7 9.6c3.5-1 7.5-.7 10.3.9M7.8 12.8c2.9-.8 6.2-.5 8.6.8M8.7 15.8c2.3-.6 4.8-.4 6.7.6'/></svg>";
+        String svgShield = "<svg viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='" + accent + "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3l8 3.5v5.5c0 4.8-3.4 8.4-8 9.8-4.6-1.4-8-5-8-9.8V6.5L12 3z'/><path d='M8.5 12.2l2.4 2.4 4.6-4.8'/></svg>";
+        String svgGithub = "<svg viewBox='0 0 24 24' width='24' height='24' fill='" + text + "'><path d='M12 2C6.48 2 2 6.58 2 12.26c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.85.09-.66.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.35 9.35 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.59.69.49A10.22 10.22 0 0 0 22 12.26C22 6.58 17.52 2 12 2z'/></svg>";
+        String svgAi = "<svg viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='#10B981' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='3.2'/><path d='M12 2.8v3.4M12 17.8v3.4M4.1 7.4l2.9 1.7M17 14.9l2.9 1.7M4.1 16.6L7 14.9M17 9.1l2.9-1.7'/></svg>";
+        String svgReddit = "<svg viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='#FF4500'/><circle cx='9.2' cy='12.5' r='1.3' fill='#FFFFFF'/><circle cx='14.8' cy='12.5' r='1.3' fill='#FFFFFF'/><path fill='none' stroke='#FFFFFF' stroke-width='1.6' stroke-linecap='round' d='M9 15.8c1.8 1.2 4.2 1.2 6 0M12 8.5l1.2-3.2 2.6.6'/><circle cx='16.5' cy='6.1' r='1.1' fill='#FFFFFF'/></svg>";
+        String svgSpeed = "<svg viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='#F59E0B' stroke-width='2' stroke-linecap='round'><path d='M4.5 17.5A9 9 0 1 1 19.5 17.5'/><line x1='12' y1='13' x2='16.5' y2='8.5'/><circle cx='12' cy='13' r='1.6' fill='#F59E0B'/></svg>";
+        String svgPalette = "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='" + accent + "' stroke-width='2'><circle cx='12' cy='12' r='9'/><circle cx='9' cy='9.5' r='1.2' fill='" + accent + "'/><circle cx='15' cy='9.5' r='1.2' fill='" + accent + "'/><circle cx='9.5' cy='14.5' r='1.2' fill='" + accent + "'/></svg>";
+        String svgMail = "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='" + accent + "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><path d='M3.5 6.5l8.5 6.5 8.5-6.5'/></svg>";
 
         String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
             + "<style>"
             + "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}"
-            + "body{margin:0;min-height:100vh;padding:34px 16px 28px;font-family:-apple-system,Roboto,sans-serif;background:" + bgCss + ";color:" + text + ";}"
-            + ".wrap{max-width:460px;margin:0 auto;}"
-            + ".brand{text-align:center;margin-bottom:22px;}"
-            + ".wordmark{font-size:28px;font-weight:700;letter-spacing:6px;color:" + text + ";}"
-            + ".sub{font-size:12px;color:" + muted + ";margin-top:6px;letter-spacing:0.3px;}"
-            + ".search{display:flex;align-items:center;background:" + cardBg + ";border:1px solid " + border + ";border-radius:14px;padding:4px 6px 4px 14px;margin-bottom:20px;}"
-            + ".search input{flex:1;background:transparent;border:none;color:" + text + ";font-size:14.5px;outline:none;padding:9px 4px;}"
-            + ".search button{background:" + accent + ";color:" + (darkText ? "#FFFFFF" : "#071019") + ";border:none;border-radius:10px;padding:8px 16px;font-weight:600;font-size:13px;}"
-            + ".section-lbl{font-size:11px;font-weight:600;letter-spacing:0.8px;color:" + muted + ";text-transform:uppercase;margin:0 0 10px 2px;}"
-            + ".grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}"
-            + ".tile{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 6px;background:" + cardBg + ";border:1px solid " + border + ";border-radius:12px;text-decoration:none;color:" + text + ";font-size:11.5px;font-weight:500;}"
-            + ".badge{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-bottom:7px;background:rgba(56,189,248,0.12);color:" + accent + ";}"
-            + ".metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;}"
-            + ".mcard{background:" + cardBg + ";border:1px solid " + border + ";border-radius:12px;padding:11px 8px;text-align:center;}"
-            + ".mval{font-size:15px;font-weight:700;color:" + text + ";}"
-            + ".mlbl{font-size:10.5px;color:" + muted + ";margin-top:3px;}"
-            + ".actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}"
-            + ".abtn{background:" + cardBg + ";border:1px solid " + border + ";border-radius:10px;padding:10px 6px;color:" + text + ";font-size:12px;font-weight:500;text-align:center;}"
-            + "</style></head><body><div class='wrap'>"
-            + "<div class='brand'><div class='wordmark'>NOVA</div><div class='sub'>Private Web Browser</div></div>"
-            + "<form class='search' onsubmit=\"var q=document.getElementById('q').value.trim();if(q){window.location.href='" + searchEngineUrl + "'+encodeURIComponent(q);}return false;\">"
-            + "<input id='q' type='text' placeholder='Search with " + searchEngineName + "...'/>"
-            + "<button type='submit'>Go</button></form>"
-            + "<div class='section-lbl'>Shortcuts</div>"
+            + "body{margin:0;min-height:100vh;padding:26px 14px 28px;font-family:-apple-system,Roboto,sans-serif;background:" + bgCss + ";color:" + text + ";text-align:center;}"
+            + ".logo{font-size:32px;font-weight:900;letter-spacing:3px;background:linear-gradient(120deg," + accent + "," + accent2 + ");-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-top:6px;}"
+            + ".tag{font-size:11.5px;color:" + sub + ";margin:5px 0 20px;letter-spacing:0.4px;}"
+            + ".glass{background:" + glass + ";backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid " + border + ";box-shadow:0 8px 28px rgba(0,0,0,0.28);}"
+            + ".search-box{display:flex;align-items:center;border-radius:24px;padding:5px 10px;margin:0 auto 18px;max-width:480px;}"
+            + ".search-box input{flex:1;background:transparent;border:none;color:" + text + ";font-size:14.5px;outline:none;padding:8px 8px;}"
+            + ".search-box button{background:linear-gradient(135deg," + accent + "," + accent2 + ");color:#FFFFFF;border:none;border-radius:16px;padding:8px 18px;font-weight:700;font-size:13px;}"
+            + ".stats{display:flex;justify-content:space-around;border-radius:18px;padding:12px 6px;margin:0 auto 18px;max-width:480px;}"
+            + ".stat-num{font-size:16px;font-weight:800;color:" + accent + ";}"
+            + ".stat-lbl{font-size:10px;color:" + sub + ";margin-top:3px;}"
+            + ".grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:480px;margin:0 auto 20px;}"
+            + ".tile{padding:13px 6px;border-radius:16px;text-decoration:none;color:" + text + ";font-size:11.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:7px;}"
+            + ".quick-row{display:flex;gap:10px;max-width:480px;margin:0 auto;}"
+            + ".qbtn{flex:1;padding:11px 10px;border-radius:16px;color:" + text + ";font-size:12.5px;font-weight:600;border:none;display:flex;align-items:center;justify-content:center;gap:7px;}"
+            + "</style></head><body>"
+            + "<div class='logo'>NOVA BROWSER</div>"
+            + "<div class='tag'>Shield v5 &bull; " + String.format(Locale.US, "%,d", rulesCount) + " Filter Rules &bull; 4x Turbo Engine</div>"
+            + "<form class='search-box glass' onsubmit=\"var q=document.getElementById('q').value.trim();if(q){window.location.href='" + searchEngineUrl + "'+encodeURIComponent(q);}return false;\">"
+            + "<input id='q' type='text' placeholder='Search with " + searchEngineName + " or enter URL...'/>"
+            + "<button type='submit'>GO</button></form>"
+            + "<div class='stats glass' onclick='window.NovaShield.openShieldPage()'>"
+            + "<div><div class='stat-num'>" + sessionBlockedCount + "</div><div class='stat-lbl'>Session Blocked</div></div>"
+            + "<div><div class='stat-num'>" + (adsBlockedCount + trackersBlockedCount) + "</div><div class='stat-lbl'>Total Blocked</div></div>"
+            + "<div><div class='stat-num'>" + String.format(Locale.US, "%,d", rulesCount) + "</div><div class='stat-lbl'>Active Rules</div></div>"
+            + "<div><div class='stat-num'>" + getRamUsageMb() + "</div><div class='stat-lbl'>Heap Used</div></div>"
+            + "</div>"
             + "<div class='grid'>"
-            + "<a class='tile' href='https://www.google.com'><div class='badge'>G</div>Google</a>"
-            + "<a class='tile' href='https://m.youtube.com'><div class='badge'>YT</div>YouTube</a>"
-            + "<a class='tile' href='https://open.spotify.com'><div class='badge'>SP</div>Spotify</a>"
-            + "<a class='tile' href='https://github.com/shahalamlaskarofficial'><div class='badge'>GH</div>GitHub</a>"
-            + "<a class='tile' href='https://chatgpt.com'><div class='badge'>AI</div>ChatGPT</a>"
-            + "<a class='tile' href='https://www.reddit.com'><div class='badge'>RD</div>Reddit</a>"
-            + "<a class='tile' href='https://en.wikipedia.org'><div class='badge'>W</div>Wiki</a>"
-            + "<a class='tile' href='https://adblock.turtlecute.org'><div class='badge'>AB</div>Ad Test</a>"
+            + "<a class='tile glass' href='https://www.google.com'>" + svgGoogle + "Google</a>"
+            + "<a class='tile glass' href='https://m.youtube.com'>" + svgYoutube + "YouTube</a>"
+            + "<a class='tile glass' href='https://open.spotify.com'>" + svgSpotify + "Spotify</a>"
+            + "<a class='tile glass' href='https://adblock.turtlecute.org'>" + svgShield + "AdTest</a>"
+            + "<a class='tile glass' href='https://github.com/shahalamlaskarofficial'>" + svgGithub + "GitHub</a>"
+            + "<a class='tile glass' href='https://chatgpt.com'>" + svgAi + "ChatGPT</a>"
+            + "<a class='tile glass' href='https://www.reddit.com'>" + svgReddit + "Reddit</a>"
+            + "<a class='tile glass' href='https://fast.com'>" + svgSpeed + "Speed</a>"
             + "</div>"
-            + "<div class='section-lbl'>Session Telemetry</div>"
-            + "<div class='metrics'>"
-            + "<div class='mcard' onclick='window.NovaShield.openShieldPage()'><div class='mval'>" + sessionBlockedCount + "</div><div class='mlbl'>Blocked (Session)</div></div>"
-            + "<div class='mcard' onclick='window.NovaShield.openShieldPage()'><div class='mval'>" + String.format(Locale.US, "%,d", rulesCount) + "</div><div class='mlbl'>Filter Rules</div></div>"
-            + "<div class='mcard'><div class='mval'>" + getRamUsageMb() + "</div><div class='mlbl'>Heap Used</div></div>"
+            + "<div class='quick-row'>"
+            + "<button class='qbtn glass' onclick='window.NovaShield.openCustomizePage()'>" + svgPalette + "Themes &amp; Wallpaper</button>"
+            + "<button class='qbtn glass' onclick='window.NovaShield.openTempMailPage()'>" + svgMail + "Temp Mail</button>"
             + "</div>"
-            + "<div class='actions'>"
-            + "<button class='abtn' onclick='window.NovaShield.openTempMailPage()'>Temp Mail</button>"
-            + "<button class='abtn' onclick='window.NovaShield.openDownloadsPage()'>Downloads</button>"
-            + "<button class='abtn' onclick='window.NovaShield.openCustomizePage()'>Appearance</button>"
-            + "</div>"
-            + "</div></body></html>";
+            + "</body></html>";
 
         webView.loadDataWithBaseURL("https://nova.browser", html, "text/html", "UTF-8", null);
         etUrl.setText("");
-        etUrl.setHint("Search " + searchEngineName + " or enter URL");
+        etUrl.setHint("Search " + searchEngineName + " or enter URL...");
         pageBlockedCount = 0;
-        animateBarsToDp(52);
+        animateBarsToDp(54);
     }
 
     // =========================================================================
@@ -1851,7 +2305,7 @@ public class MainActivity extends AppCompatActivity {
                 ? "nova_image_" + System.currentTimeMillis() + ".png"
                 : suggestedName;
         String safeMime = mimeType != null ? mimeType : "image/png";
-        Toast.makeText(this, "Saving file...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Capturing image/blob file...", Toast.LENGTH_SHORT).show();
 
         String js = "(function(){"
             + "fetch('" + escapeJs(blobUrl) + "').then(function(r){return r.blob();}).then(function(b){"
@@ -1867,17 +2321,27 @@ public class MainActivity extends AppCompatActivity {
         wv.evaluateJavascript(js, null);
     }
 
-    private void showImageLongPressSheet(WebView wv, String imgUrl) {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Image", imgUrl, dialog::dismiss));
+    private void showImageLongPressDialog(WebView wv, String imgUrl) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("Image Options", IC_IMAGE, dialog::dismiss));
 
-        list.addView(makeListRow("Download Image", "Save", getAccentHex(), () -> {
+        TextView tvUrl = new TextView(this);
+        tvUrl.setText(imgUrl);
+        tvUrl.setTextColor(Color.parseColor("#94A3B8"));
+        tvUrl.setTextSize(11.5f);
+        tvUrl.setSingleLine(true);
+        tvUrl.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        tvUrl.setPadding(dp(2), 0, dp(2), dp(10));
+        outer.addView(tvUrl);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        lp.setMargins(0, 0, 0, dp(7));
+
+        Button btnDl = createGlassButton("Download Image", IC_DOWNLOAD, "#0072FF", "#00C6FF", "#FFFFFF");
+        btnDl.setOnClickListener(v -> {
             dialog.dismiss();
             String guessed = URLUtil.guessFileName(imgUrl, null, "image/jpeg");
             if (imgUrl.startsWith("blob:")) {
@@ -1890,23 +2354,25 @@ public class MainActivity extends AppCompatActivity {
                 updateDownloadDockBadge();
                 Toast.makeText(this, "Downloading image...", Toast.LENGTH_SHORT).show();
             }
-        }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Open Image in New Tab", null, null, () -> {
-            dialog.dismiss();
-            createNewTab(imgUrl);
-        }));
-        list.addView(makeHairline());
-        list.addView(makeListRow("Copy Image Address", null, null, () -> {
+        });
+        outer.addView(btnDl, lp);
+
+        Button btnOpen = createGlassButton("Open in New Tab", IC_PLUS, "#2BFFFFFF", "#12FFFFFF", "#FFFFFF");
+        btnOpen.setOnClickListener(v -> { dialog.dismiss(); createNewTab(imgUrl); });
+        outer.addView(btnOpen, lp);
+
+        Button btnCopy = createGlassButton("Copy Image Link", IC_COPY, "#2BFFFFFF", "#12FFFFFF", "#FFFFFF");
+        btnCopy.setOnClickListener(v -> {
             dialog.dismiss();
             ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cb != null) {
                 cb.setPrimaryClip(ClipData.newPlainText("Image URL", imgUrl));
-                Toast.makeText(this, "Image address copied", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Image link copied", Toast.LENGTH_SHORT).show();
             }
-        }));
-        body.addView(list);
-        dialog.show();
+        });
+        outer.addView(btnCopy, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+
+        showGlassModal(dialog, outer, false);
     }
 
     private boolean isStreamingWebpageUrl(String url) {
@@ -1918,175 +2384,209 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // CLEAN DOWNLOAD MANAGER BOTTOM SHEET
+    // LIQUID GLASS 4x TURBO DOWNLOAD MANAGER (ZERO EMOJIS, DRAWN ICONS)
     // =========================================================================
 
-    private void promptNewDownloadSheet(String url, String suggestedName, long contentLength, String cookie, String referer) {
+    private void promptNewTurboDownload(String url, String suggestedName, long contentLength, String cookie, String referer) {
         boolean isHttps = url.toLowerCase(Locale.US).startsWith("https://");
-        String sizeText = contentLength > 0 ? DownloadService.formatBytes(contentLength) : "Size detected on start";
+        String sizeText = contentLength > 0 ? DownloadService.formatBytes(contentLength) : "Auto-detect on start";
 
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Download File", (isHttps ? "HTTPS  •  " : "HTTP  •  ") + sizeText, dialog::dismiss));
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("NOVA 4x Downloader", IC_DOWNLOAD, dialog::dismiss));
+
+        TextView tvSec = new TextView(this);
+        tvSec.setText((isHttps ? "HTTPS Encrypted" : "HTTP Stream") + "  •  " + sizeText + "\nForeground Service  •  Saves to Downloads/NOVA Browser");
+        tvSec.setTextColor(Color.parseColor(isHttps ? "#00F5A0" : "#FFD000"));
+        tvSec.setTextSize(11.8f);
+        tvSec.setPadding(dp(2), 0, dp(2), dp(10));
+        outer.addView(tvSec);
 
         EditText etName = new EditText(this);
         etName.setText(suggestedName);
-        etName.setHint("Filename");
-        etName.setTextColor(colTextPrimary());
-        etName.setHintTextColor(colTextSecondary());
-        etName.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
+        etName.setHint("File name...");
+        etName.setTextColor(Color.parseColor("#FFFFFF"));
+        etName.setHintTextColor(Color.parseColor("#64748B"));
+        etName.setBackground(makeGlassDrawable(
+                Color.parseColor("#AA060D1E"),
+                Color.parseColor("#AA122140"),
+                Color.parseColor("#6600D2FF"),
+                12, 1));
         etName.setPadding(dp(12), dp(9), dp(12), dp(9));
         etName.setSingleLine(true);
         etName.setTextSize(13.5f);
-        LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
-        eLp.setMargins(0, 0, 0, dp(12));
-        body.addView(etName, eLp);
+        outer.addView(etName);
 
-        Button btnStart = makePrimaryButton("Start Download");
+        Button btnStart = createGlassButton("Start 4x Turbo Download", IC_DOWNLOAD, "#0072FF", "#00C6FF", "#FFFFFF");
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
+        startLp.setMargins(0, dp(12), 0, 0);
         btnStart.setOnClickListener(v -> {
             String finalName = etName.getText().toString().trim();
             if (finalName.isEmpty()) finalName = "nova_file_" + System.currentTimeMillis();
             DownloadService.startNewDownload(this, url, finalName, defaultUserAgent, cookie, referer);
             updateDownloadDockBadge();
             dialog.dismiss();
-            showDownloadManagerSheet();
+            showTurboDownloadManager();
         });
-        body.addView(btnStart, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
-        dialog.show();
+        outer.addView(btnStart, startLp);
+
+        showGlassModal(dialog, outer, false);
     }
 
-    private void showDownloadManagerSheet() {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, true);
+    private void showTurboDownloadManager() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        long freeMb = DownloadService.getStagingDir(this).getFreeSpace() / (1024 * 1024);
-        body.addView(makeSheetHeader("Downloads", "Downloads/NOVA Browser  •  " + freeMb + " MB free", dialog::dismiss));
+        LinearLayout outerGlass = createModalOuterContainer();
+        outerGlass.addView(createModalHeader("NOVA 4x Downloads", IC_DOWNLOAD, dialog::dismiss));
 
         ScrollView scrollRoot = new ScrollView(this);
         scrollRoot.setVerticalScrollBarEnabled(false);
-        LinearLayout stack = new LinearLayout(this);
-        stack.setOrientation(LinearLayout.VERTICAL);
-        scrollRoot.addView(stack);
+        LinearLayout stackContainer = new LinearLayout(this);
+        stackContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollRoot.addView(stackContainer);
 
-        // Direct URL Card
-        LinearLayout linkCard = makeCleanCard();
-        linkCard.addView(makeSmallLabel("Direct File URL"));
+        LinearLayout statsCard = createGlassCard();
+        long freeSpaceMb = DownloadService.getStagingDir(this).getFreeSpace() / (1024 * 1024);
+        TextView tvEngine = new TextView(this);
+        tvEngine.setText("4x Parallel 128 KB Foreground Engine  •  Supports Images, Blob & Direct Files\nFree Space: " + freeSpaceMb + " MB  •  Folder: Downloads/NOVA Browser");
+        tvEngine.setTextColor(Color.parseColor(getAccentHex()));
+        tvEngine.setTextSize(11.5f);
+        statsCard.addView(tvEngine);
+        stackContainer.addView(statsCard);
+
+        LinearLayout linkCard = createGlassCard();
+        linkCard.addView(makeSectionLabel("DIRECT LINK DOWNLOAD", getAccentHex()));
 
         EditText etDirectUrl = new EditText(this);
-        etDirectUrl.setHint("Paste direct link (.apk, .mp4, .jpg, .zip, .pdf)");
-        etDirectUrl.setTextColor(colTextPrimary());
-        etDirectUrl.setHintTextColor(colTextSecondary());
-        etDirectUrl.setBackground(makeRoundedBg(colSurface(), colBorder(), 8, 1));
-        etDirectUrl.setPadding(dp(10), dp(8), dp(10), dp(8));
+        etDirectUrl.setHint("Paste direct link (.jpg, .png, .mp4, .apk, .zip, .pdf)...");
+        etDirectUrl.setTextColor(Color.parseColor("#FFFFFF"));
+        etDirectUrl.setHintTextColor(Color.parseColor("#94A3B8"));
+        etDirectUrl.setBackground(makeGlassDrawable(
+                Color.parseColor("#AA060D1E"),
+                Color.parseColor("#AA0E1B36"),
+                Color.parseColor("#5500D2FF"),
+                12, 1));
+        etDirectUrl.setPadding(dp(12), dp(9), dp(12), dp(9));
         etDirectUrl.setSingleLine(true);
         etDirectUrl.setTextSize(13f);
-        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
         etLp.setMargins(0, 0, 0, dp(8));
         linkCard.addView(etDirectUrl, etLp);
 
-        LinearLayout linkBtns = new LinearLayout(this);
-        linkBtns.setOrientation(LinearLayout.HORIZONTAL);
-        Button btnPaste = makeSecondaryButton("Paste", null);
-        LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(0, dp(36), 1f);
-        pLp.setMargins(0, 0, dp(8), 0);
-        linkBtns.addView(btnPaste, pLp);
+        LinearLayout linkBtnRow = new LinearLayout(this);
+        linkBtnRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button btnGo = makePrimaryButton("Download");
-        linkBtns.addView(btnGo, new LinearLayout.LayoutParams(0, dp(36), 1f));
-        linkCard.addView(linkBtns);
-        stack.addView(linkCard);
+        Button btnPaste = createGlassButton("Paste Link", IC_COPY, "#33FFFFFF", "#1AFFFFFF", "#FFFFFF");
+        LinearLayout.LayoutParams pasteLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        pasteLp.setMargins(0, 0, dp(8), 0);
+        linkBtnRow.addView(btnPaste, pasteLp);
+
+        Button btnDirectGo = createGlassButton("Download", IC_DOWNLOAD, "#0072FF", "#00C6FF", "#FFFFFF");
+        linkBtnRow.addView(btnDirectGo, new LinearLayout.LayoutParams(0, dp(38), 1f));
+        linkCard.addView(linkBtnRow);
+        stackContainer.addView(linkCard);
 
         btnPaste.setOnClickListener(v -> {
             ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cb != null && cb.hasPrimaryClip() && cb.getPrimaryClip() != null && cb.getPrimaryClip().getItemCount() > 0) {
                 CharSequence clip = cb.getPrimaryClip().getItemAt(0).getText();
-                if (clip != null) etDirectUrl.setText(clip.toString().trim());
+                if (clip != null) {
+                    etDirectUrl.setText(clip.toString().trim());
+                    Toast.makeText(this, "Link pasted", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
-        // Queue Header
-        LinearLayout qHdr = new LinearLayout(this);
-        qHdr.setOrientation(LinearLayout.HORIZONTAL);
-        qHdr.setGravity(Gravity.CENTER_VERTICAL);
-        qHdr.setPadding(dp(2), dp(4), dp(2), dp(6));
+        LinearLayout queueSectionHeader = new LinearLayout(this);
+        queueSectionHeader.setOrientation(LinearLayout.HORIZONTAL);
+        queueSectionHeader.setGravity(Gravity.CENTER_VERTICAL);
+        queueSectionHeader.setPadding(dp(2), dp(4), dp(2), dp(6));
 
-        TextView tvQLbl = makeSmallLabel("Queue");
-        qHdr.addView(tvQLbl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvQueueTitle = makeSectionLabel("ACTIVE & RECENT QUEUE", getAccentHex());
+        queueSectionHeader.addView(tvQueueTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        Button btnClear = makeSecondaryButton("Clear Done", null);
-        qHdr.addView(btnClear, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
-        stack.addView(qHdr);
+        Button btnClearDone = createGlassButton("Clear Done", IC_TRASH, "#26FFFFFF", "#12FFFFFF", "#CBD5E1");
+        queueSectionHeader.addView(btnClearDone, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
+        stackContainer.addView(queueSectionHeader);
 
-        LinearLayout queueList = new LinearLayout(this);
-        queueList.setOrientation(LinearLayout.VERTICAL);
-        stack.addView(queueList);
+        LinearLayout queueListLayout = new LinearLayout(this);
+        queueListLayout.setOrientation(LinearLayout.VERTICAL);
+        stackContainer.addView(queueListLayout);
 
-        // Category Filter Row
-        LinearLayout catCard = makeCleanCard();
-        catCard.addView(makeSmallLabel("Browse Saved Files"));
-        String[] catNames = {"All", "APKs", "Videos", "Images", "Docs", "Archives"};
+        LinearLayout catCard = createGlassCard();
+        catCard.addView(makeSectionLabel("SAVED FILES (DOWNLOADS/NOVA BROWSER)", getAccentHex()));
+
+        String[] catNames = {"All", "APKs", "Videos", "Images", "Docs", "ZIPs"};
         String[][] catExts = {
             {}, {".apk"}, {".mp4", ".mkv", ".webm", ".avi"},
             {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"},
             {".pdf", ".doc", ".docx", ".txt", ".xlsx"},
             {".zip", ".rar", ".7z", ".tar", ".gz"}
         };
+
         for (int row = 0; row < 2; row++) {
-            LinearLayout r = new LinearLayout(this);
-            r.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout rLayout = new LinearLayout(this);
+            rLayout.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (row == 0) rLp.setMargins(0, 0, 0, dp(6));
+
             for (int col = 0; col < 3; col++) {
                 final int idx = row * 3 + col;
-                Button chip = makeSecondaryButton(catNames[idx], null);
-                chip.setTextSize(12f);
-                LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(34), 1f);
+                Button chip = createGlassButton(catNames[idx], 0, "#2B00D2FF", "#166366F1", "#E0F2FE");
+                LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(35), 1f);
                 if (col < 2) cLp.setMargins(0, 0, dp(6), 0);
                 chip.setOnClickListener(v -> showFilteredFiles(catNames[idx], catExts[idx]));
-                r.addView(chip, cLp);
+                rLayout.addView(chip, cLp);
             }
-            catCard.addView(r, rLp);
+            catCard.addView(rLayout, rLp);
         }
-        stack.addView(catCard);
+        stackContainer.addView(catCard);
 
-        body.addView(scrollRoot, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        outerGlass.addView(scrollRoot, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        Button btnBgKeep = createGlassButton("Minimize (Keep Downloading in Background)", IC_CHECK, "#2B00D2FF", "#166366F1", "#7DD3FC");
+        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        footLp.setMargins(0, dp(8), 0, 0);
+        btnBgKeep.setOnClickListener(v -> dialog.dismiss());
+        outerGlass.addView(btnBgKeep, footLp);
 
         final Map<DownloadService.TurboDownloadTask, QueueCardRefs> renderedRefs = new HashMap<>();
 
         Runnable syncQueueUI = () -> {
             updateDownloadDockBadge();
-            boolean rebuild = renderedRefs.size() != DownloadService.TASKS.size();
-            if (!rebuild) {
+            boolean needsFullRebuild = renderedRefs.size() != DownloadService.TASKS.size();
+            if (!needsFullRebuild) {
                 for (DownloadService.TurboDownloadTask t : DownloadService.TASKS) {
                     QueueCardRefs ref = renderedRefs.get(t);
                     if (ref == null || ref.renderedStatus != t.status) {
-                        rebuild = true;
+                        needsFullRebuild = true;
                         break;
                     }
                 }
             }
 
-            if (rebuild) {
-                queueList.removeAllViews();
+            if (needsFullRebuild) {
+                queueListLayout.removeAllViews();
                 renderedRefs.clear();
 
                 if (DownloadService.TASKS.isEmpty()) {
-                    LinearLayout empty = makeCleanCard();
-                    TextView tvE = new TextView(this);
-                    tvE.setText("No active downloads. Long-press any image on a page or paste a direct file URL above.");
-                    tvE.setTextColor(colTextSecondary());
-                    tvE.setTextSize(12.5f);
-                    empty.addView(tvE);
-                    queueList.addView(empty);
+                    LinearLayout emptyCard = createGlassCard();
+                    TextView tvEmpty = new TextView(this);
+                    tvEmpty.setText("No active downloads.\nLong-press any image on a webpage, or paste a direct file URL above.");
+                    tvEmpty.setTextColor(Color.parseColor("#CBD5E1"));
+                    tvEmpty.setTextSize(12.2f);
+                    emptyCard.addView(tvEmpty);
+                    queueListLayout.addView(emptyCard);
                 } else {
                     for (DownloadService.TurboDownloadTask task : DownloadService.TASKS) {
-                        LinearLayout card = makeCleanCard();
+                        LinearLayout card = createGlassCard();
 
                         TextView tvName = new TextView(this);
-                        tvName.setTextColor(colTextPrimary());
+                        tvName.setTextColor(Color.parseColor("#FFFFFF"));
                         tvName.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
                         tvName.setTextSize(13f);
                         tvName.setSingleLine(true);
@@ -2095,50 +2595,50 @@ public class MainActivity extends AppCompatActivity {
 
                         ProgressBar pb = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
                         pb.setMax(100);
-                        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6));
-                        pbLp.setMargins(0, dp(6), 0, dp(5));
+                        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(7));
+                        pbLp.setMargins(0, dp(7), 0, dp(5));
                         card.addView(pb, pbLp);
 
                         TextView tvStatus = new TextView(this);
                         tvStatus.setTextSize(11.5f);
                         card.addView(tvStatus);
 
-                        LinearLayout ctrl = new LinearLayout(this);
-                        ctrl.setOrientation(LinearLayout.HORIZONTAL);
-                        ctrl.setGravity(Gravity.END);
-                        ctrl.setPadding(0, dp(8), 0, 0);
+                        LinearLayout ctrlRow = new LinearLayout(this);
+                        ctrlRow.setOrientation(LinearLayout.HORIZONTAL);
+                        ctrlRow.setGravity(Gravity.END);
+                        ctrlRow.setPadding(0, dp(7), 0, 0);
 
                         if (task.status == DownloadService.TurboDownloadTask.STATUS_DOWNLOADING) {
-                            Button bPause = makeSecondaryButton("Pause", "#F59E0B");
-                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32));
-                            lp.setMargins(0, 0, dp(6), 0);
-                            bPause.setOnClickListener(v -> task.status = DownloadService.TurboDownloadTask.STATUS_PAUSED);
-                            ctrl.addView(bPause, lp);
+                            Button btnPause = createGlassButton("Pause", IC_PAUSE, "#33FFD000", "#1AFFD000", "#FFE566");
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+                            lp.setMargins(0, 0, dp(8), 0);
+                            btnPause.setOnClickListener(v -> task.status = DownloadService.TurboDownloadTask.STATUS_PAUSED);
+                            ctrlRow.addView(btnPause, lp);
                         } else if (task.status == DownloadService.TurboDownloadTask.STATUS_PAUSED || task.status == DownloadService.TurboDownloadTask.STATUS_FAILED) {
-                            Button bRes = makePrimaryButton("Resume");
-                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32));
-                            lp.setMargins(0, 0, dp(6), 0);
-                            bRes.setOnClickListener(v -> DownloadService.resumeDownload(this, task));
-                            ctrl.addView(bRes, lp);
+                            Button btnResume = createGlassButton("Resume", IC_PLAY, "#0072FF", "#00C6FF", "#FFFFFF");
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+                            lp.setMargins(0, 0, dp(8), 0);
+                            btnResume.setOnClickListener(v -> DownloadService.resumeDownload(this, task));
+                            ctrlRow.addView(btnResume, lp);
                         }
 
                         if (task.status != DownloadService.TurboDownloadTask.STATUS_COMPLETED && task.status != DownloadService.TurboDownloadTask.STATUS_CANCELLED) {
-                            Button bCan = makeSecondaryButton("Cancel", "#F87171");
-                            bCan.setOnClickListener(v -> {
+                            Button btnCancel = createGlassButton("Cancel", IC_CLOSE, "#33EF4444", "#1AEF4444", "#FCA5A5");
+                            btnCancel.setOnClickListener(v -> {
                                 task.status = DownloadService.TurboDownloadTask.STATUS_CANCELLED;
                                 if (task.stagingFile != null && task.stagingFile.exists()) task.stagingFile.delete();
                             });
-                            ctrl.addView(bCan, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
+                            ctrlRow.addView(btnCancel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34)));
                         }
 
                         if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) {
-                            Button bOpen = makePrimaryButton("Open Folder");
-                            bOpen.setOnClickListener(v -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)));
-                            ctrl.addView(bOpen, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
+                            Button btnOpen = createGlassButton("Open Folder", IC_FOLDER, "#00B09B", "#00F5A0", "#042016");
+                            btnOpen.setOnClickListener(v -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)));
+                            ctrlRow.addView(btnOpen, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34)));
                         }
 
-                        card.addView(ctrl);
-                        queueList.addView(card);
+                        card.addView(ctrlRow);
+                        queueListLayout.addView(card);
 
                         QueueCardRefs ref = new QueueCardRefs();
                         ref.tvName = tvName;
@@ -2160,32 +2660,35 @@ public class MainActivity extends AppCompatActivity {
                 if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) pct = 100;
                 ref.pb.setProgress(Math.min(100, Math.max(0, pct)));
 
-                String ratio = DownloadService.formatBytes(dl) + " / " + DownloadService.formatBytes(task.totalBytes);
+                String sizeRatio = DownloadService.formatBytes(dl) + " / " + DownloadService.formatBytes(task.totalBytes);
                 if (task.status == DownloadService.TurboDownloadTask.STATUS_DOWNLOADING) {
-                    String spd = DownloadService.formatBytes(task.speedBytesPerSec) + "/s";
-                    String eta = (task.speedBytesPerSec > 0 && task.totalBytes > dl)
-                            ? "  •  " + ((task.totalBytes - dl) / task.speedBytesPerSec) + "s left" : "";
-                    ref.tvStatus.setText(pct + "%  •  " + ratio + "  •  " + spd + eta);
-                    ref.tvStatus.setTextColor(Color.parseColor(getAccentHex()));
+                    String speedStr = DownloadService.formatBytes(task.speedBytesPerSec) + "/s";
+                    String etaStr = (task.speedBytesPerSec > 0 && task.totalBytes > dl)
+                            ? "  •  ETA " + ((task.totalBytes - dl) / task.speedBytesPerSec) + "s" : "";
+                    ref.tvStatus.setText(pct + "%  •  " + sizeRatio + "  •  " + speedStr + etaStr);
+                    ref.tvStatus.setTextColor(Color.parseColor("#00E5FF"));
                 } else if (task.status == DownloadService.TurboDownloadTask.STATUS_PAUSED) {
-                    ref.tvStatus.setText("Paused at " + pct + "%  •  " + ratio);
-                    ref.tvStatus.setTextColor(Color.parseColor("#F59E0B"));
+                    ref.tvStatus.setText("PAUSED at " + pct + "%  •  " + sizeRatio);
+                    ref.tvStatus.setTextColor(Color.parseColor("#FFD000"));
                 } else if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) {
-                    ref.tvStatus.setText("Completed  •  " + DownloadService.formatBytes(dl) + "  •  " + task.savedDisplayPath);
-                    ref.tvStatus.setTextColor(Color.parseColor("#22C55E"));
+                    ref.tvStatus.setText("SAVED  •  " + DownloadService.formatBytes(dl) + "  •  " + task.savedDisplayPath);
+                    ref.tvStatus.setTextColor(Color.parseColor("#00F5A0"));
                 } else if (task.status == DownloadService.TurboDownloadTask.STATUS_CANCELLED) {
-                    ref.tvStatus.setText("Cancelled");
-                    ref.tvStatus.setTextColor(Color.parseColor("#F87171"));
+                    ref.tvStatus.setText("CANCELLED");
+                    ref.tvStatus.setTextColor(Color.parseColor("#FB7185"));
                 } else {
-                    ref.tvStatus.setText("Failed: " + task.errorMsg);
-                    ref.tvStatus.setTextColor(Color.parseColor("#F87171"));
+                    ref.tvStatus.setText("FAILED: " + task.errorMsg);
+                    ref.tvStatus.setTextColor(Color.parseColor("#FB7185"));
                 }
             }
         };
 
-        btnGo.setOnClickListener(v -> {
+        btnDirectGo.setOnClickListener(v -> {
             String rawUrl = etDirectUrl.getText().toString().trim();
-            if (rawUrl.isEmpty()) return;
+            if (rawUrl.isEmpty()) {
+                Toast.makeText(this, "Paste a valid file URL first", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (rawUrl.startsWith("data:")) {
                 DownloadService.saveDataUrl(this, rawUrl, "nova_image_" + System.currentTimeMillis());
                 etDirectUrl.setText("");
@@ -2200,8 +2703,8 @@ public class MainActivity extends AppCompatActivity {
             final String finalUrl = rawUrl;
             if (isStreamingWebpageUrl(finalUrl)) {
                 new AlertDialog.Builder(this)
-                    .setTitle("Webpage Link Detected")
-                    .setMessage("YouTube and Spotify URLs point to protected streaming webpages rather than direct file downloads. Open in an ad-filtered tab instead?")
+                    .setTitle("Streaming Webpage Detected")
+                    .setMessage("YouTube and Spotify links point to protected streaming webpages rather than direct file links. Open ad-free in a browser tab instead?")
                     .setPositiveButton("Open in Tab", (d, w) -> {
                         dialog.dismiss();
                         WebView wv = getCurrentWebView();
@@ -2218,7 +2721,7 @@ public class MainActivity extends AppCompatActivity {
             syncQueueUI.run();
         });
 
-        btnClear.setOnClickListener(v -> {
+        btnClearDone.setOnClickListener(v -> {
             DownloadService.TASKS.removeIf(t -> t.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED
                     || t.status == DownloadService.TurboDownloadTask.STATUS_CANCELLED
                     || t.status == DownloadService.TurboDownloadTask.STATUS_FAILED);
@@ -2234,7 +2737,7 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         dialog.setOnShowListener(d -> uiHandler.post(liveUpdater));
-        dialog.show();
+        showGlassModal(dialog, outerGlass, true);
     }
 
     private void showFilteredFiles(String title, String[] extensions) {
@@ -2296,14 +2799,14 @@ public class MainActivity extends AppCompatActivity {
                 Uri fileUri = uris.get(which);
                 new AlertDialog.Builder(this)
                     .setTitle(labels.get(which))
-                    .setMessage("Location: Downloads/NOVA Browser")
-                    .setPositiveButton("Open Downloads", (d2, w2) -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
-                    .setNeutralButton("Delete", (d2, w2) -> {
+                    .setMessage("Saved in Phone Storage -> Downloads/NOVA Browser")
+                    .setPositiveButton("Open Downloads Folder", (d2, w2) -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
+                    .setNeutralButton("Delete File", (d2, w2) -> {
                         try {
                             getContentResolver().delete(fileUri, null, null);
-                            Toast.makeText(this, "File deleted", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show();
                         } catch (Exception e) {
-                            Toast.makeText(this, "Delete from system Files app", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Delete from your Files app", Toast.LENGTH_SHORT).show();
                         }
                     })
                     .setNegativeButton("Close", null)
@@ -2313,7 +2816,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // FILTER ENGINE (LOW-RAM 64-BIT SORTED HASH ARRAYS)
+    // FILTER ENGINE (ULTRA-LOW RAM 64-BIT SORTED HASH ARRAYS)
     // =========================================================================
 
     private static long fnv1a64(String s) {
@@ -2388,7 +2891,7 @@ public class MainActivity extends AppCompatActivity {
                     loadHashesFromFile(cacheFile);
                     int total = adHostHashes.length + trackerHostHashes.length;
                     uiHandler.post(() -> Toast.makeText(MainActivity.this,
-                            "Filter database synced: " + String.format(Locale.US, "%,d", total) + " rules",
+                            "NOVA Shield Ready: " + String.format(Locale.US, "%,d", total) + " rules",
                             Toast.LENGTH_SHORT).show());
                 } else {
                     tmpFile.delete();
@@ -2560,7 +3063,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // TABS, WEBVIEW SETUP & LIFECYCLE
+    // TAB ENGINE, WEBVIEW SETUP & LIFECYCLE
     // =========================================================================
 
     private WebView getCurrentWebView() {
@@ -2608,11 +3111,13 @@ public class MainActivity extends AppCompatActivity {
         String url = active.getUrl();
         if (url == null || url.startsWith("https://nova.browser")) {
             etUrl.setText("");
-            etUrl.setHint("Search " + searchEngineName + " or enter URL");
-            animateBarsToDp(52);
+            etUrl.setHint("Search " + searchEngineName + " or enter URL...");
+            updateShieldToolbarIcon(false);
+            animateBarsToDp(54);
         } else {
             etUrl.setText(url);
-            animateBarsToDp(44);
+            updateShieldToolbarIcon(!url.startsWith("https://"));
+            animateBarsToDp(46);
         }
     }
 
@@ -2661,7 +3166,7 @@ public class MainActivity extends AppCompatActivity {
                     || res.getType() == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) {
                 String imgUrl = res.getExtra();
                 if (imgUrl != null && !imgUrl.isEmpty()) {
-                    showImageLongPressSheet(webView, imgUrl);
+                    showImageLongPressDialog(webView, imgUrl);
                     return true;
                 }
             }
@@ -2672,13 +3177,13 @@ public class MainActivity extends AppCompatActivity {
             webView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
                 String currentUrl = webView.getUrl();
                 if (currentUrl != null && currentUrl.startsWith("https://nova.browser")) {
-                    animateBarsToDp(52);
+                    animateBarsToDp(54);
                     return;
                 }
                 int dy = scrollY - oldScrollY;
-                if (scrollY <= dp(10)) animateBarsToDp(44);
+                if (scrollY <= dp(10)) animateBarsToDp(46);
                 else if (dy > dp(18)) animateBarsToDp(0);
-                else if (dy < -dp(14)) animateBarsToDp(44);
+                else if (dy < -dp(14)) animateBarsToDp(46);
             });
         }
 
@@ -2711,12 +3216,12 @@ public class MainActivity extends AppCompatActivity {
                     pageBlockedCount = 0;
                     if (url.startsWith("https://nova.browser")) {
                         etUrl.setText("");
-                        btnShield.setText("S");
-                        animateBarsToDp(52);
+                        updateShieldToolbarIcon(false);
+                        animateBarsToDp(54);
                     } else {
                         etUrl.setText(url);
-                        btnShield.setText(url.startsWith("https://") ? "S" : "!");
-                        animateBarsToDp(44);
+                        updateShieldToolbarIcon(!url.startsWith("https://"));
+                        animateBarsToDp(46);
                     }
                     progressBar.setVisibility(View.VISIBLE);
                 }
@@ -2787,7 +3292,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             String cookie = CookieManager.getInstance().getCookie(url);
-            promptNewDownloadSheet(url, guessedName, contentLength, cookie, webView.getUrl());
+            promptNewTurboDownload(url, guessedName, contentLength, cookie, webView.getUrl());
         });
     }
 
@@ -2852,20 +3357,61 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // SECONDARY SHEETS & UTILITIES (TABS, BOOKMARKS, HISTORY, PERFORMANCE, ABOUT)
+    // DEVELOPER PAGE, TAB SWITCHER, BOOKMARKS, HISTORY & UTILITIES
     // =========================================================================
 
-    private void showTabSwitcherSheet() {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Tabs (" + tabs.size() + ")", "Inactive tabs are suspended automatically", dialog::dismiss));
+    private void showAboutDeveloperDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("About & Developer", IC_USER, dialog::dismiss));
+
+        LinearLayout card = createGlassCard();
+        TextView tvInfo = new TextView(this);
+        tvInfo.setText("NOVA Browser v" + APP_VERSION + " — Liquid Glass Edition\n\n"
+                + "Developer: " + DEV_NAME + "\n"
+                + "Email: " + DEV_EMAIL + "\n"
+                + "GitHub: @shahalamlaskarofficial\n\n"
+                + "Regular Updates:\n"
+                + "NOVA Browser is actively maintained with regular updates bringing stronger filter lists, faster download stability, UI improvements, and RAM optimization. Check Releases for seamless in-place APK updates.");
+        tvInfo.setTextColor(Color.parseColor("#E2E8F0"));
+        tvInfo.setTextSize(12.5f);
+        tvInfo.setLineSpacing(dp(2), 1f);
+        card.addView(tvInfo);
+        outer.addView(card);
+
+        Button btnEmail = createGlassButton("Email Developer", IC_MAIL, "#0072FF", "#00C6FF", "#FFFFFF");
+        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        bLp.setMargins(0, 0, 0, dp(8));
+        btnEmail.setOnClickListener(v -> {
+            Intent email = new Intent(Intent.ACTION_SENDTO);
+            email.setData(Uri.parse("mailto:" + DEV_EMAIL + "?subject=" + Uri.encode("NOVA Browser v" + APP_VERSION + " Feedback")));
+            startActivity(Intent.createChooser(email, "Email " + DEV_NAME));
+        });
+        outer.addView(btnEmail, bLp);
+
+        Button btnGit = createGlassButton("Check GitHub Releases", IC_RELOAD, "#2B00F5A0", "#1400B09B", "#00F5A0");
+        btnGit.setOnClickListener(v -> {
+            WebView wv = getCurrentWebView();
+            if (wv != null) wv.loadUrl(DEV_GITHUB + "/Nova-Browser--advanced-/releases");
+            dialog.dismiss();
+        });
+        outer.addView(btnGit, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(39)));
+
+        showGlassModal(dialog, outer, false);
+    }
+
+    private void showTabSwitcherDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("Open Tabs (" + tabs.size() + ")", IC_LINK, dialog::dismiss));
 
         ScrollView sc = new ScrollView(this);
-        sc.setVerticalScrollBarEnabled(false);
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
         sc.addView(list);
 
         for (int i = 0; i < tabs.size(); i++) {
@@ -2875,28 +3421,33 @@ public class MainActivity extends AppCompatActivity {
             if (title == null || title.isEmpty() || (wv.getUrl() != null && wv.getUrl().startsWith("https://nova.browser"))) {
                 title = "NOVA Home";
             }
-            String badge = (i == currentTabIndex) ? "ACTIVE" : "IDLE";
-            list.addView(makeListRow((i + 1) + ". " + title, badge, i == currentTabIndex ? getAccentHex() : null, () -> {
-                dialog.dismiss();
-                switchToTab(idx);
-            }));
-            if (i < tabs.size() - 1) list.addView(makeHairline());
+            boolean isActive = (i == currentTabIndex);
+            Button tb = createGlassButton(
+                    (i + 1) + ". " + title + (isActive ? "  [Active]" : "  [Suspended]"),
+                    isActive ? IC_CHECK : IC_GLOBE,
+                    isActive ? "#3300D2FF" : "#22FFFFFF",
+                    isActive ? "#186366F1" : "#10FFFFFF",
+                    isActive ? "#FFFFFF" : "#CBD5E1");
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+            lp.setMargins(0, 0, 0, dp(6));
+            tb.setOnClickListener(v -> { dialog.dismiss(); switchToTab(idx); });
+            list.addView(tb, lp);
         }
-        body.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        outer.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams aLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        aLp.setMargins(0, dp(10), 0, 0);
+        aLp.setMargins(0, dp(8), 0, 0);
 
-        Button bNew = makePrimaryButton("New Tab");
+        Button bNew = createGlassButton("New Tab", IC_PLUS, "#0072FF", "#00C6FF", "#FFFFFF");
         LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
         l1.setMargins(0, 0, dp(6), 0);
         bNew.setOnClickListener(v -> { dialog.dismiss(); createNewTab("nova://home"); });
         actions.addView(bNew, l1);
 
         if (!closedTabs.isEmpty()) {
-            Button bRe = makeSecondaryButton("Reopen", null);
+            Button bRe = createGlassButton("Reopen", IC_RELOAD, "#2BFFFFFF", "#12FFFFFF", "#FFFFFF");
             LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(0, dp(38), 1f);
             l2.setMargins(0, 0, dp(6), 0);
             bRe.setOnClickListener(v -> { dialog.dismiss(); createNewTab(closedTabs.remove(0)); });
@@ -2904,141 +3455,39 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (tabs.size() > 1) {
-            Button bCls = makeSecondaryButton("Close Tab", "#F87171");
+            Button bCls = createGlassButton("Close", IC_TRASH, "#33EF4444", "#1AEF4444", "#FCA5A5");
             bCls.setOnClickListener(v -> { dialog.dismiss(); closeTab(currentTabIndex); });
             actions.addView(bCls, new LinearLayout.LayoutParams(0, dp(38), 1f));
         }
 
-        body.addView(actions, aLp);
-        dialog.show();
+        outer.addView(actions, aLp);
+        showGlassModal(dialog, outer, false);
     }
 
-    private void showBookmarksSheet() {
-        Set<String> saved = new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<>()));
-        List<String> items = new ArrayList<>(saved);
-        WebView wv = getCurrentWebView();
+    private void showPerformanceOptimizerDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Bookmarks", saved.size() + " saved", dialog::dismiss));
+        LinearLayout outer = createModalOuterContainer();
+        outer.addView(createModalHeader("RAM & Battery Optimizer", IC_BOLT, dialog::dismiss));
 
-        Button btnAdd = makePrimaryButton("Bookmark Current Page");
-        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
-        addLp.setMargins(0, 0, 0, dp(10));
-        btnAdd.setOnClickListener(v -> {
-            if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
-                String entry = (wv.getTitle() != null ? wv.getTitle() : "Site") + " | " + wv.getUrl();
-                saved.add(entry);
-                prefs.edit().putStringSet("bookmarks", saved).apply();
-                Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-            } else {
-                Toast.makeText(this, "Open a webpage first", Toast.LENGTH_SHORT).show();
-            }
-        });
-        body.addView(btnAdd, addLp);
-
-        if (!items.isEmpty()) {
-            ScrollView sc = new ScrollView(this);
-            LinearLayout list = new LinearLayout(this);
-            list.setOrientation(LinearLayout.VERTICAL);
-            list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-            sc.addView(list);
-            for (int i = 0; i < items.size(); i++) {
-                String raw = items.get(i);
-                int sep = raw.lastIndexOf(" | ");
-                String label = sep != -1 ? raw.substring(0, sep) : raw;
-                String url = sep != -1 ? raw.substring(sep + 3) : raw;
-                list.addView(makeListRow(label, null, null, () -> {
-                    dialog.dismiss();
-                    if (wv != null) wv.loadUrl(url);
-                }));
-                if (i < items.size() - 1) list.addView(makeHairline());
-            }
-            body.addView(sc);
-
-            Button btnClear = makeSecondaryButton("Clear All Bookmarks", "#F87171");
-            LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36));
-            cLp.setMargins(0, dp(10), 0, 0);
-            btnClear.setOnClickListener(v -> {
-                prefs.edit().remove("bookmarks").apply();
-                Toast.makeText(this, "Bookmarks cleared", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-            });
-            body.addView(btnClear, cLp);
-        }
-        dialog.show();
-    }
-
-    private void showHistorySheet() {
-        Set<String> history = new HashSet<>(prefs.getStringSet("history", new HashSet<>()));
-        List<String> items = new ArrayList<>(history);
-        if (items.isEmpty()) {
-            Toast.makeText(this, "History is empty", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        WebView wv = getCurrentWebView();
-
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, true);
-        body.addView(makeSheetHeader("History", items.size() + " recent entries", dialog::dismiss));
-
-        ScrollView sc = new ScrollView(this);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
-        sc.addView(list);
-
-        for (int i = 0; i < items.size(); i++) {
-            String raw = items.get(i);
-            int sep = raw.lastIndexOf(" | ");
-            String label = sep != -1 ? raw.substring(0, sep) : raw;
-            String url = sep != -1 ? raw.substring(sep + 3) : raw;
-            list.addView(makeListRow(label, null, null, () -> {
-                dialog.dismiss();
-                if (wv != null) wv.loadUrl(url);
-            }));
-            if (i < items.size() - 1) list.addView(makeHairline());
-        }
-        body.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        Button btnClear = makeSecondaryButton("Clear History", "#F87171");
-        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
-        cLp.setMargins(0, dp(10), 0, 0);
-        btnClear.setOnClickListener(v -> {
-            prefs.edit().remove("history").apply();
-            Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        });
-        body.addView(btnClear, cLp);
-        dialog.show();
-    }
-
-    private void showPerformanceSheet() {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("Memory & Battery", "Runtime resource management", dialog::dismiss));
-
-        LinearLayout card = makeCleanCard();
+        LinearLayout card = createGlassCard();
         TextView tv = new TextView(this);
         tv.setText("JVM Heap Used: " + getRamUsageMb() + "\n"
-                + "Filter Index Footprint: ~1.4 MB (64-bit primitive array)\n"
+                + "Blocklist Index: ~1.4 MB (64-bit Primitive Array)\n"
                 + "Active Tabs: 1  •  Suspended Tabs: " + Math.max(0, tabs.size() - 1) + "\n"
-                + "Background Timer Suspension: " + (isBatterySaver ? "Enabled" : "Disabled"));
-        tv.setTextColor(colTextSecondary());
+                + "Battery Saver (Pause Timers): " + (isBatterySaver ? "Enabled" : "Disabled"));
+        tv.setTextColor(Color.parseColor("#CBD5E1"));
         tv.setTextSize(12.5f);
         tv.setLineSpacing(dp(3), 1f);
         card.addView(tv);
-        body.addView(card);
+        outer.addView(card);
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button btnBoost = makePrimaryButton("Trim Memory Now");
-        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        Button btnBoost = createGlassButton("Boost RAM Now", IC_BOLT, "#0072FF", "#00C6FF", "#FFFFFF");
+        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(39), 1f);
         l1.setMargins(0, 0, dp(8), 0);
         btnBoost.setOnClickListener(v -> {
             for (int i = 0; i < tabs.size(); i++) {
@@ -3046,62 +3495,22 @@ public class MainActivity extends AppCompatActivity {
                 if (i != currentTabIndex) tabs.get(i).onPause();
             }
             System.gc();
-            Toast.makeText(this, "Memory trimmed (" + getRamUsageMb() + ")", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "RAM trimmed (" + getRamUsageMb() + ")", Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         });
         row.addView(btnBoost, l1);
 
-        Button btnBat = makeSecondaryButton(isBatterySaver ? "Battery Saver: ON" : "Battery Saver: OFF", null);
+        Button btnBat = createGlassButton(isBatterySaver ? "Battery: ON" : "Battery: OFF", IC_CHECK, "#2BFFFFFF", "#12FFFFFF", "#FFFFFF");
         btnBat.setOnClickListener(v -> {
             isBatterySaver = !isBatterySaver;
             prefs.edit().putBoolean("battery_saver", isBatterySaver).apply();
+            Toast.makeText(this, "Battery Saver " + (isBatterySaver ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         });
-        row.addView(btnBat, new LinearLayout.LayoutParams(0, dp(38), 1f));
-        body.addView(row);
-        dialog.show();
-    }
+        row.addView(btnBat, new LinearLayout.LayoutParams(0, dp(39), 1f));
+        outer.addView(row);
 
-    private void showAboutSheet() {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        final Dialog dialog = createBottomSheetDialog(body, false);
-        body.addView(makeSheetHeader("About NOVA Browser", "Version " + APP_VERSION, dialog::dismiss));
-
-        LinearLayout card = makeCleanCard();
-        TextView tvInfo = new TextView(this);
-        tvInfo.setText("Developer: " + DEV_NAME + "\n"
-                + "Email: " + DEV_EMAIL + "\n"
-                + "GitHub: @shahalamlaskarofficial\n\n"
-                + "Regular Updates: NOVA Browser receives ongoing updates for filter rules, download stability, and performance. Check GitHub Releases for seamless in-place APK updates.");
-        tvInfo.setTextColor(colTextSecondary());
-        tvInfo.setTextSize(12.5f);
-        tvInfo.setLineSpacing(dp(3), 1f);
-        card.addView(tvInfo);
-        body.addView(card);
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-
-        Button btnEmail = makePrimaryButton("Contact Developer");
-        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
-        l1.setMargins(0, 0, dp(8), 0);
-        btnEmail.setOnClickListener(v -> {
-            Intent email = new Intent(Intent.ACTION_SENDTO);
-            email.setData(Uri.parse("mailto:" + DEV_EMAIL + "?subject=" + Uri.encode("NOVA Browser v" + APP_VERSION + " Feedback")));
-            startActivity(Intent.createChooser(email, "Email " + DEV_NAME));
-        });
-        row.addView(btnEmail, l1);
-
-        Button btnReleases = makeSecondaryButton("Check Updates", getAccentHex());
-        btnReleases.setOnClickListener(v -> {
-            WebView wv = getCurrentWebView();
-            if (wv != null) wv.loadUrl(DEV_GITHUB + "/Nova-Browser--advanced-/releases");
-            dialog.dismiss();
-        });
-        row.addView(btnReleases, new LinearLayout.LayoutParams(0, dp(38), 1f));
-        body.addView(row);
-        dialog.show();
+        showGlassModal(dialog, outer, false);
     }
 
     private void loadUserInput(String input) {
@@ -3120,22 +3529,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSearchEngineDialog() {
-        String[] engines = {"Google", "Brave Search", "Bing", "Startpage", "DuckDuckGo"};
+        String[] engines = {"Google (Default)", "Brave Search", "Bing", "Startpage (Private)", "DuckDuckGo"};
         String[] urls = {
             "https://www.google.com/search?q=", "https://search.brave.com/search?q=",
             "https://www.bing.com/search?q=", "https://www.startpage.com/do/dsearch?query=",
             "https://duckduckgo.com/?q="
         };
+        String[] names = {"Google", "Brave", "Bing", "Startpage", "DuckDuckGo"};
 
         new AlertDialog.Builder(this)
-            .setTitle("Search Engine")
+            .setTitle("Select Search Engine")
             .setItems(engines, (d, which) -> {
-                searchEngineName = engines[which];
+                searchEngineName = names[which];
                 searchEngineUrl = urls[which];
                 prefs.edit().putString("search_name", searchEngineName).putString("search_url", searchEngineUrl).apply();
                 WebView wv = getCurrentWebView();
                 if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) loadNovaHome(wv);
-                Toast.makeText(this, "Search engine set to " + searchEngineName, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Search Engine: " + searchEngineName, Toast.LENGTH_SHORT).show();
             })
             .show();
     }
@@ -3148,7 +3558,7 @@ public class MainActivity extends AppCompatActivity {
         for (WebView tab : tabs) tab.getSettings().setUserAgentString(ua);
         WebView wv = getCurrentWebView();
         if (wv != null) wv.reload();
-        Toast.makeText(this, "Desktop site " + (isDesktopMode ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Desktop Mode " + (isDesktopMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
     }
 
     private void toggleIncognitoMode() {
@@ -3157,15 +3567,15 @@ public class MainActivity extends AppCompatActivity {
         for (WebView tab : tabs) {
             tab.getSettings().setCacheMode(isIncognito ? WebSettings.LOAD_NO_CACHE : WebSettings.LOAD_DEFAULT);
         }
-        applyCleanTheme();
-        Toast.makeText(this, "Private mode " + (isIncognito ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
+        applyLiquidGlassTheme();
+        Toast.makeText(this, "Private Browsing " + (isIncognito ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
     }
 
     private void showZoomDialog() {
-        String[] sizes = {"75%", "100% (Default)", "125%", "150%"};
+        String[] sizes = {"75% (Small)", "100% (Default)", "125% (Large)", "150% (Extra Large)"};
         int[] vals = {75, 100, 125, 150};
         new AlertDialog.Builder(this)
-            .setTitle("Text Zoom")
+            .setTitle("Website Font & Zoom Size")
             .setItems(sizes, (d, which) -> {
                 textZoomPercent = vals[which];
                 for (WebView tab : tabs) tab.getSettings().setTextZoom(textZoomPercent);
@@ -3178,13 +3588,41 @@ public class MainActivity extends AppCompatActivity {
         if (isFullScreen) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             bottomBar.setVisibility(View.GONE);
-            bottomDivider.setVisibility(View.GONE);
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             bottomBar.setVisibility(View.VISIBLE);
-            bottomDivider.setVisibility(View.VISIBLE);
-            animateBarsToDp(44);
+            animateBarsToDp(46);
         }
+    }
+
+    private void showBookmarksDialog() {
+        Set<String> saved = new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<>()));
+        List<String> list = new ArrayList<>(saved);
+        list.add(0, "+ Bookmark Current Page");
+
+        new AlertDialog.Builder(this)
+            .setTitle("NOVA Bookmarks (" + saved.size() + ")")
+            .setItems(list.toArray(new String[0]), (d, which) -> {
+                WebView wv = getCurrentWebView();
+                if (which == 0) {
+                    if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
+                        String entry = (wv.getTitle() != null ? wv.getTitle() : "Site") + " | " + wv.getUrl();
+                        saved.add(entry);
+                        prefs.edit().putStringSet("bookmarks", saved).apply();
+                        Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    String item = list.get(which);
+                    int sep = item.lastIndexOf(" | ");
+                    if (wv != null) wv.loadUrl(sep != -1 ? item.substring(sep + 3) : item);
+                }
+            })
+            .setNeutralButton("Clear All", (d, w) -> {
+                prefs.edit().remove("bookmarks").apply();
+                Toast.makeText(this, "Bookmarks cleared", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("Close", null)
+            .show();
     }
 
     private void saveToHistory(String title, String url) {
@@ -3194,12 +3632,37 @@ public class MainActivity extends AppCompatActivity {
         prefs.edit().putStringSet("history", history).apply();
     }
 
+    private void showHistoryDialog() {
+        Set<String> history = new HashSet<>(prefs.getStringSet("history", new HashSet<>()));
+        List<String> list = new ArrayList<>(history);
+        if (list.isEmpty()) {
+            Toast.makeText(this, "Browsing history is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Browsing History")
+            .setItems(list.toArray(new String[0]), (d, which) -> {
+                String item = list.get(which);
+                int sep = item.lastIndexOf(" | ");
+                if (sep != -1) {
+                    WebView wv = getCurrentWebView();
+                    if (wv != null) wv.loadUrl(item.substring(sep + 3));
+                }
+            })
+            .setNeutralButton("Clear History", (d, w) -> {
+                prefs.edit().remove("history").apply();
+                Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("Close", null)
+            .show();
+    }
+
     private void shareOrCopyUrl(WebView wv) {
         if (wv == null || wv.getUrl() == null) return;
         String url = wv.getUrl();
-        String[] actions = {"Copy Page Link", "Share Link", "Generate QR Code"};
+        String[] actions = {"Copy Page Link", "Share Website Link", "Generate QR Code for URL"};
         new AlertDialog.Builder(this)
-            .setTitle("Share")
+            .setTitle("Share & Link Tools")
             .setItems(actions, (d, which) -> {
                 if (which == 0) {
                     ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
