@@ -1812,4 +1812,1421 @@ public class MainActivity extends AppCompatActivity {
             + "<a class='tile' href='https://open.spotify.com'><div class='badge'>SP</div>Spotify</a>"
             + "<a class='tile' href='https://github.com/shahalamlaskarofficial'><div class='badge'>GH</div>GitHub</a>"
             + "<a class='tile' href='https://chatgpt.com'><div class='badge'>AI</div>ChatGPT</a>"
-            + "<a class='tile' href='
+            + "<a class='tile' href='https://www.reddit.com'><div class='badge'>RD</div>Reddit</a>"
+            + "<a class='tile' href='https://en.wikipedia.org'><div class='badge'>W</div>Wiki</a>"
+            + "<a class='tile' href='https://adblock.turtlecute.org'><div class='badge'>AB</div>Ad Test</a>"
+            + "</div>"
+            + "<div class='section-lbl'>Session Telemetry</div>"
+            + "<div class='metrics'>"
+            + "<div class='mcard' onclick='window.NovaShield.openShieldPage()'><div class='mval'>" + sessionBlockedCount + "</div><div class='mlbl'>Blocked (Session)</div></div>"
+            + "<div class='mcard' onclick='window.NovaShield.openShieldPage()'><div class='mval'>" + String.format(Locale.US, "%,d", rulesCount) + "</div><div class='mlbl'>Filter Rules</div></div>"
+            + "<div class='mcard'><div class='mval'>" + getRamUsageMb() + "</div><div class='mlbl'>Heap Used</div></div>"
+            + "</div>"
+            + "<div class='actions'>"
+            + "<button class='abtn' onclick='window.NovaShield.openTempMailPage()'>Temp Mail</button>"
+            + "<button class='abtn' onclick='window.NovaShield.openDownloadsPage()'>Downloads</button>"
+            + "<button class='abtn' onclick='window.NovaShield.openCustomizePage()'>Appearance</button>"
+            + "</div>"
+            + "</div></body></html>";
+
+        webView.loadDataWithBaseURL("https://nova.browser", html, "text/html", "UTF-8", null);
+        etUrl.setText("");
+        etUrl.setHint("Search " + searchEngineName + " or enter URL");
+        pageBlockedCount = 0;
+        animateBarsToDp(52);
+    }
+
+    // =========================================================================
+    // BLOB, DATA & LONG-PRESS IMAGE DOWNLOADS
+    // =========================================================================
+
+    private String escapeJs(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "").replace("\r", "");
+    }
+
+    private void fetchBlobFromWebView(WebView wv, String blobUrl, String suggestedName, String mimeType) {
+        if (wv == null) return;
+        String safeName = (suggestedName == null || suggestedName.isEmpty())
+                ? "nova_image_" + System.currentTimeMillis() + ".png"
+                : suggestedName;
+        String safeMime = mimeType != null ? mimeType : "image/png";
+        Toast.makeText(this, "Saving file...", Toast.LENGTH_SHORT).show();
+
+        String js = "(function(){"
+            + "fetch('" + escapeJs(blobUrl) + "').then(function(r){return r.blob();}).then(function(b){"
+            + "var rd=new FileReader();"
+            + "rd.onloadend=function(){"
+            + "if(window.NovaShield&&rd.result){"
+            + "window.NovaShield.saveBlobData(rd.result,'" + escapeJs(safeName) + "',b.type||'" + escapeJs(safeMime) + "');}"
+            + "};"
+            + "rd.readAsDataURL(b);"
+            + "}).catch(function(e){"
+            + "if(window.NovaShield){window.NovaShield.reportBlobError(String(e));}"
+            + "});})();";
+        wv.evaluateJavascript(js, null);
+    }
+
+    private void showImageLongPressSheet(WebView wv, String imgUrl) {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("Image", imgUrl, dialog::dismiss));
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+
+        list.addView(makeListRow("Download Image", "Save", getAccentHex(), () -> {
+            dialog.dismiss();
+            String guessed = URLUtil.guessFileName(imgUrl, null, "image/jpeg");
+            if (imgUrl.startsWith("blob:")) {
+                fetchBlobFromWebView(wv, imgUrl, guessed, "image/png");
+            } else if (imgUrl.startsWith("data:")) {
+                DownloadService.saveDataUrl(this, imgUrl, "nova_image_" + System.currentTimeMillis());
+            } else {
+                String cookie = CookieManager.getInstance().getCookie(imgUrl);
+                DownloadService.startNewDownload(this, imgUrl, guessed, defaultUserAgent, cookie, wv.getUrl());
+                updateDownloadDockBadge();
+                Toast.makeText(this, "Downloading image...", Toast.LENGTH_SHORT).show();
+            }
+        }));
+        list.addView(makeHairline());
+        list.addView(makeListRow("Open Image in New Tab", null, null, () -> {
+            dialog.dismiss();
+            createNewTab(imgUrl);
+        }));
+        list.addView(makeHairline());
+        list.addView(makeListRow("Copy Image Address", null, null, () -> {
+            dialog.dismiss();
+            ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cb != null) {
+                cb.setPrimaryClip(ClipData.newPlainText("Image URL", imgUrl));
+                Toast.makeText(this, "Image address copied", Toast.LENGTH_SHORT).show();
+            }
+        }));
+        body.addView(list);
+        dialog.show();
+    }
+
+    private boolean isStreamingWebpageUrl(String url) {
+        String lower = url.toLowerCase(Locale.US);
+        return lower.contains("youtube.com/watch")
+                || lower.contains("youtu.be/")
+                || lower.contains("youtube.com/shorts/")
+                || lower.contains("open.spotify.com/");
+    }
+
+    // =========================================================================
+    // CLEAN DOWNLOAD MANAGER BOTTOM SHEET
+    // =========================================================================
+
+    private void promptNewDownloadSheet(String url, String suggestedName, long contentLength, String cookie, String referer) {
+        boolean isHttps = url.toLowerCase(Locale.US).startsWith("https://");
+        String sizeText = contentLength > 0 ? DownloadService.formatBytes(contentLength) : "Size detected on start";
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("Download File", (isHttps ? "HTTPS  •  " : "HTTP  •  ") + sizeText, dialog::dismiss));
+
+        EditText etName = new EditText(this);
+        etName.setText(suggestedName);
+        etName.setHint("Filename");
+        etName.setTextColor(colTextPrimary());
+        etName.setHintTextColor(colTextSecondary());
+        etName.setBackground(makeRoundedBg(colElevated(), colBorder(), 10, 1));
+        etName.setPadding(dp(12), dp(9), dp(12), dp(9));
+        etName.setSingleLine(true);
+        etName.setTextSize(13.5f);
+        LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        eLp.setMargins(0, 0, 0, dp(12));
+        body.addView(etName, eLp);
+
+        Button btnStart = makePrimaryButton("Start Download");
+        btnStart.setOnClickListener(v -> {
+            String finalName = etName.getText().toString().trim();
+            if (finalName.isEmpty()) finalName = "nova_file_" + System.currentTimeMillis();
+            DownloadService.startNewDownload(this, url, finalName, defaultUserAgent, cookie, referer);
+            updateDownloadDockBadge();
+            dialog.dismiss();
+            showDownloadManagerSheet();
+        });
+        body.addView(btnStart, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        dialog.show();
+    }
+
+    private void showDownloadManagerSheet() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, true);
+
+        long freeMb = DownloadService.getStagingDir(this).getFreeSpace() / (1024 * 1024);
+        body.addView(makeSheetHeader("Downloads", "Downloads/NOVA Browser  •  " + freeMb + " MB free", dialog::dismiss));
+
+        ScrollView scrollRoot = new ScrollView(this);
+        scrollRoot.setVerticalScrollBarEnabled(false);
+        LinearLayout stack = new LinearLayout(this);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        scrollRoot.addView(stack);
+
+        // Direct URL Card
+        LinearLayout linkCard = makeCleanCard();
+        linkCard.addView(makeSmallLabel("Direct File URL"));
+
+        EditText etDirectUrl = new EditText(this);
+        etDirectUrl.setHint("Paste direct link (.apk, .mp4, .jpg, .zip, .pdf)");
+        etDirectUrl.setTextColor(colTextPrimary());
+        etDirectUrl.setHintTextColor(colTextSecondary());
+        etDirectUrl.setBackground(makeRoundedBg(colSurface(), colBorder(), 8, 1));
+        etDirectUrl.setPadding(dp(10), dp(8), dp(10), dp(8));
+        etDirectUrl.setSingleLine(true);
+        etDirectUrl.setTextSize(13f);
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        etLp.setMargins(0, 0, 0, dp(8));
+        linkCard.addView(etDirectUrl, etLp);
+
+        LinearLayout linkBtns = new LinearLayout(this);
+        linkBtns.setOrientation(LinearLayout.HORIZONTAL);
+        Button btnPaste = makeSecondaryButton("Paste", null);
+        LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(0, dp(36), 1f);
+        pLp.setMargins(0, 0, dp(8), 0);
+        linkBtns.addView(btnPaste, pLp);
+
+        Button btnGo = makePrimaryButton("Download");
+        linkBtns.addView(btnGo, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        linkCard.addView(linkBtns);
+        stack.addView(linkCard);
+
+        btnPaste.setOnClickListener(v -> {
+            ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cb != null && cb.hasPrimaryClip() && cb.getPrimaryClip() != null && cb.getPrimaryClip().getItemCount() > 0) {
+                CharSequence clip = cb.getPrimaryClip().getItemAt(0).getText();
+                if (clip != null) etDirectUrl.setText(clip.toString().trim());
+            }
+        });
+
+        // Queue Header
+        LinearLayout qHdr = new LinearLayout(this);
+        qHdr.setOrientation(LinearLayout.HORIZONTAL);
+        qHdr.setGravity(Gravity.CENTER_VERTICAL);
+        qHdr.setPadding(dp(2), dp(4), dp(2), dp(6));
+
+        TextView tvQLbl = makeSmallLabel("Queue");
+        qHdr.addView(tvQLbl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnClear = makeSecondaryButton("Clear Done", null);
+        qHdr.addView(btnClear, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
+        stack.addView(qHdr);
+
+        LinearLayout queueList = new LinearLayout(this);
+        queueList.setOrientation(LinearLayout.VERTICAL);
+        stack.addView(queueList);
+
+        // Category Filter Row
+        LinearLayout catCard = makeCleanCard();
+        catCard.addView(makeSmallLabel("Browse Saved Files"));
+        String[] catNames = {"All", "APKs", "Videos", "Images", "Docs", "Archives"};
+        String[][] catExts = {
+            {}, {".apk"}, {".mp4", ".mkv", ".webm", ".avi"},
+            {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"},
+            {".pdf", ".doc", ".docx", ".txt", ".xlsx"},
+            {".zip", ".rar", ".7z", ".tar", ".gz"}
+        };
+        for (int row = 0; row < 2; row++) {
+            LinearLayout r = new LinearLayout(this);
+            r.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (row == 0) rLp.setMargins(0, 0, 0, dp(6));
+            for (int col = 0; col < 3; col++) {
+                final int idx = row * 3 + col;
+                Button chip = makeSecondaryButton(catNames[idx], null);
+                chip.setTextSize(12f);
+                LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(34), 1f);
+                if (col < 2) cLp.setMargins(0, 0, dp(6), 0);
+                chip.setOnClickListener(v -> showFilteredFiles(catNames[idx], catExts[idx]));
+                r.addView(chip, cLp);
+            }
+            catCard.addView(r, rLp);
+        }
+        stack.addView(catCard);
+
+        body.addView(scrollRoot, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        final Map<DownloadService.TurboDownloadTask, QueueCardRefs> renderedRefs = new HashMap<>();
+
+        Runnable syncQueueUI = () -> {
+            updateDownloadDockBadge();
+            boolean rebuild = renderedRefs.size() != DownloadService.TASKS.size();
+            if (!rebuild) {
+                for (DownloadService.TurboDownloadTask t : DownloadService.TASKS) {
+                    QueueCardRefs ref = renderedRefs.get(t);
+                    if (ref == null || ref.renderedStatus != t.status) {
+                        rebuild = true;
+                        break;
+                    }
+                }
+            }
+
+            if (rebuild) {
+                queueList.removeAllViews();
+                renderedRefs.clear();
+
+                if (DownloadService.TASKS.isEmpty()) {
+                    LinearLayout empty = makeCleanCard();
+                    TextView tvE = new TextView(this);
+                    tvE.setText("No active downloads. Long-press any image on a page or paste a direct file URL above.");
+                    tvE.setTextColor(colTextSecondary());
+                    tvE.setTextSize(12.5f);
+                    empty.addView(tvE);
+                    queueList.addView(empty);
+                } else {
+                    for (DownloadService.TurboDownloadTask task : DownloadService.TASKS) {
+                        LinearLayout card = makeCleanCard();
+
+                        TextView tvName = new TextView(this);
+                        tvName.setTextColor(colTextPrimary());
+                        tvName.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+                        tvName.setTextSize(13f);
+                        tvName.setSingleLine(true);
+                        tvName.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+                        card.addView(tvName);
+
+                        ProgressBar pb = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+                        pb.setMax(100);
+                        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6));
+                        pbLp.setMargins(0, dp(6), 0, dp(5));
+                        card.addView(pb, pbLp);
+
+                        TextView tvStatus = new TextView(this);
+                        tvStatus.setTextSize(11.5f);
+                        card.addView(tvStatus);
+
+                        LinearLayout ctrl = new LinearLayout(this);
+                        ctrl.setOrientation(LinearLayout.HORIZONTAL);
+                        ctrl.setGravity(Gravity.END);
+                        ctrl.setPadding(0, dp(8), 0, 0);
+
+                        if (task.status == DownloadService.TurboDownloadTask.STATUS_DOWNLOADING) {
+                            Button bPause = makeSecondaryButton("Pause", "#F59E0B");
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32));
+                            lp.setMargins(0, 0, dp(6), 0);
+                            bPause.setOnClickListener(v -> task.status = DownloadService.TurboDownloadTask.STATUS_PAUSED);
+                            ctrl.addView(bPause, lp);
+                        } else if (task.status == DownloadService.TurboDownloadTask.STATUS_PAUSED || task.status == DownloadService.TurboDownloadTask.STATUS_FAILED) {
+                            Button bRes = makePrimaryButton("Resume");
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32));
+                            lp.setMargins(0, 0, dp(6), 0);
+                            bRes.setOnClickListener(v -> DownloadService.resumeDownload(this, task));
+                            ctrl.addView(bRes, lp);
+                        }
+
+                        if (task.status != DownloadService.TurboDownloadTask.STATUS_COMPLETED && task.status != DownloadService.TurboDownloadTask.STATUS_CANCELLED) {
+                            Button bCan = makeSecondaryButton("Cancel", "#F87171");
+                            bCan.setOnClickListener(v -> {
+                                task.status = DownloadService.TurboDownloadTask.STATUS_CANCELLED;
+                                if (task.stagingFile != null && task.stagingFile.exists()) task.stagingFile.delete();
+                            });
+                            ctrl.addView(bCan, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
+                        }
+
+                        if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) {
+                            Button bOpen = makePrimaryButton("Open Folder");
+                            bOpen.setOnClickListener(v -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)));
+                            ctrl.addView(bOpen, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)));
+                        }
+
+                        card.addView(ctrl);
+                        queueList.addView(card);
+
+                        QueueCardRefs ref = new QueueCardRefs();
+                        ref.tvName = tvName;
+                        ref.pb = pb;
+                        ref.tvStatus = tvStatus;
+                        ref.renderedStatus = task.status;
+                        renderedRefs.put(task, ref);
+                    }
+                }
+            }
+
+            for (DownloadService.TurboDownloadTask task : DownloadService.TASKS) {
+                QueueCardRefs ref = renderedRefs.get(task);
+                if (ref == null) continue;
+                ref.tvName.setText(task.fileName + (task.isMultiSegment ? " [4x]" : ""));
+
+                long dl = task.downloadedBytes.get();
+                int pct = (task.totalBytes > 0) ? (int) ((dl * 100L) / task.totalBytes) : 0;
+                if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) pct = 100;
+                ref.pb.setProgress(Math.min(100, Math.max(0, pct)));
+
+                String ratio = DownloadService.formatBytes(dl) + " / " + DownloadService.formatBytes(task.totalBytes);
+                if (task.status == DownloadService.TurboDownloadTask.STATUS_DOWNLOADING) {
+                    String spd = DownloadService.formatBytes(task.speedBytesPerSec) + "/s";
+                    String eta = (task.speedBytesPerSec > 0 && task.totalBytes > dl)
+                            ? "  •  " + ((task.totalBytes - dl) / task.speedBytesPerSec) + "s left" : "";
+                    ref.tvStatus.setText(pct + "%  •  " + ratio + "  •  " + spd + eta);
+                    ref.tvStatus.setTextColor(Color.parseColor(getAccentHex()));
+                } else if (task.status == DownloadService.TurboDownloadTask.STATUS_PAUSED) {
+                    ref.tvStatus.setText("Paused at " + pct + "%  •  " + ratio);
+                    ref.tvStatus.setTextColor(Color.parseColor("#F59E0B"));
+                } else if (task.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED) {
+                    ref.tvStatus.setText("Completed  •  " + DownloadService.formatBytes(dl) + "  •  " + task.savedDisplayPath);
+                    ref.tvStatus.setTextColor(Color.parseColor("#22C55E"));
+                } else if (task.status == DownloadService.TurboDownloadTask.STATUS_CANCELLED) {
+                    ref.tvStatus.setText("Cancelled");
+                    ref.tvStatus.setTextColor(Color.parseColor("#F87171"));
+                } else {
+                    ref.tvStatus.setText("Failed: " + task.errorMsg);
+                    ref.tvStatus.setTextColor(Color.parseColor("#F87171"));
+                }
+            }
+        };
+
+        btnGo.setOnClickListener(v -> {
+            String rawUrl = etDirectUrl.getText().toString().trim();
+            if (rawUrl.isEmpty()) return;
+            if (rawUrl.startsWith("data:")) {
+                DownloadService.saveDataUrl(this, rawUrl, "nova_image_" + System.currentTimeMillis());
+                etDirectUrl.setText("");
+                return;
+            }
+            if (rawUrl.startsWith("blob:")) {
+                fetchBlobFromWebView(getCurrentWebView(), rawUrl, "nova_blob_" + System.currentTimeMillis() + ".png", "image/png");
+                etDirectUrl.setText("");
+                return;
+            }
+            if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) rawUrl = "https://" + rawUrl;
+            final String finalUrl = rawUrl;
+            if (isStreamingWebpageUrl(finalUrl)) {
+                new AlertDialog.Builder(this)
+                    .setTitle("Webpage Link Detected")
+                    .setMessage("YouTube and Spotify URLs point to protected streaming webpages rather than direct file downloads. Open in an ad-filtered tab instead?")
+                    .setPositiveButton("Open in Tab", (d, w) -> {
+                        dialog.dismiss();
+                        WebView wv = getCurrentWebView();
+                        if (wv != null) wv.loadUrl(finalUrl);
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+                return;
+            }
+            String guessed = URLUtil.guessFileName(finalUrl, null, null);
+            String cookie = CookieManager.getInstance().getCookie(finalUrl);
+            DownloadService.startNewDownload(this, finalUrl, guessed, defaultUserAgent, cookie, null);
+            etDirectUrl.setText("");
+            syncQueueUI.run();
+        });
+
+        btnClear.setOnClickListener(v -> {
+            DownloadService.TASKS.removeIf(t -> t.status == DownloadService.TurboDownloadTask.STATUS_COMPLETED
+                    || t.status == DownloadService.TurboDownloadTask.STATUS_CANCELLED
+                    || t.status == DownloadService.TurboDownloadTask.STATUS_FAILED);
+            syncQueueUI.run();
+        });
+
+        Runnable liveUpdater = new Runnable() {
+            @Override
+            public void run() {
+                if (!dialog.isShowing()) return;
+                syncQueueUI.run();
+                uiHandler.postDelayed(this, 500);
+            }
+        };
+        dialog.setOnShowListener(d -> uiHandler.post(liveUpdater));
+        dialog.show();
+    }
+
+    private void showFilteredFiles(String title, String[] extensions) {
+        List<String> labels = new ArrayList<>();
+        List<Uri> uris = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            String[] projection = {MediaStore.Downloads._ID, MediaStore.Downloads.DISPLAY_NAME, MediaStore.Downloads.SIZE};
+            try (Cursor c = getContentResolver().query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    projection, null, null,
+                    MediaStore.Downloads.DATE_ADDED + " DESC")) {
+                if (c != null) {
+                    int idCol = c.getColumnIndexOrThrow(MediaStore.Downloads._ID);
+                    int nameCol = c.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME);
+                    int sizeCol = c.getColumnIndexOrThrow(MediaStore.Downloads.SIZE);
+                    while (c.moveToNext()) {
+                        String name = c.getString(nameCol);
+                        if (name == null) continue;
+                        String lower = name.toLowerCase(Locale.US);
+                        boolean ok = extensions.length == 0;
+                        for (String ext : extensions) {
+                            if (lower.endsWith(ext)) { ok = true; break; }
+                        }
+                        if (ok) {
+                            labels.add(name + " (" + DownloadService.formatBytes(c.getLong(sizeCol)) + ")");
+                            uris.add(Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(c.getLong(idCol))));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        } else {
+            File pubDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "NOVA Browser");
+            File[] files = pubDir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    if (!f.isFile()) continue;
+                    String lower = f.getName().toLowerCase(Locale.US);
+                    boolean ok = extensions.length == 0;
+                    for (String ext : extensions) {
+                        if (lower.endsWith(ext)) { ok = true; break; }
+                    }
+                    if (ok) {
+                        labels.add(f.getName() + " (" + DownloadService.formatBytes(f.length()) + ")");
+                        uris.add(Uri.fromFile(f));
+                    }
+                }
+            }
+        }
+
+        if (labels.isEmpty()) {
+            Toast.makeText(this, "No matching files in Downloads/NOVA Browser", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle(title + " (" + labels.size() + ")")
+            .setItems(labels.toArray(new String[0]), (d, which) -> {
+                Uri fileUri = uris.get(which);
+                new AlertDialog.Builder(this)
+                    .setTitle(labels.get(which))
+                    .setMessage("Location: Downloads/NOVA Browser")
+                    .setPositiveButton("Open Downloads", (d2, w2) -> startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
+                    .setNeutralButton("Delete", (d2, w2) -> {
+                        try {
+                            getContentResolver().delete(fileUri, null, null);
+                            Toast.makeText(this, "File deleted", Toast.LENGTH_SHORT).show();
+                        } catch (Exception e) {
+                            Toast.makeText(this, "Delete from system Files app", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .setNegativeButton("Close", null)
+                    .show();
+            })
+            .show();
+    }
+
+    // =========================================================================
+    // FILTER ENGINE (LOW-RAM 64-BIT SORTED HASH ARRAYS)
+    // =========================================================================
+
+    private static long fnv1a64(String s) {
+        long h = 0xcbf29ce484222325L;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= (s.charAt(i) & 0xff);
+            h *= 0x100000001b3L;
+        }
+        return h;
+    }
+
+    private static long[] sortAndCompact(long[] arr, int count) {
+        if (count <= 0) return new long[0];
+        Arrays.sort(arr, 0, count);
+        int unique = 1;
+        for (int i = 1; i < count; i++) {
+            if (arr[i] != arr[unique - 1]) arr[unique++] = arr[i];
+        }
+        return Arrays.copyOf(arr, unique);
+    }
+
+    private void initCoreHashes() {
+        long[] ads = new long[CORE_AD_DOMAINS.length];
+        for (int i = 0; i < CORE_AD_DOMAINS.length; i++) ads[i] = fnv1a64(CORE_AD_DOMAINS[i]);
+        adHostHashes = sortAndCompact(ads, ads.length);
+
+        long[] trk = new long[CORE_TRACKER_DOMAINS.length];
+        for (int i = 0; i < CORE_TRACKER_DOMAINS.length; i++) trk[i] = fnv1a64(CORE_TRACKER_DOMAINS[i]);
+        trackerHostHashes = sortAndCompact(trk, trk.length);
+    }
+
+    private void loadCachedAndSyncFilterLists(boolean forceRefresh) {
+        new Thread(() -> {
+            File cacheFile = new File(getFilesDir(), "nova_shield_v6_hosts.txt");
+            if (!forceRefresh && cacheFile.exists() && cacheFile.length() > 10000) {
+                loadHashesFromFile(cacheFile);
+            }
+
+            long ageMs = System.currentTimeMillis() - cacheFile.lastModified();
+            if (forceRefresh || !cacheFile.exists() || cacheFile.length() < 10000 || ageMs > 86400000L) {
+                File tmpFile = new File(getFilesDir(), "nova_shield_v6_tmp.txt");
+                int written = 0;
+                try (BufferedWriter bw = new BufferedWriter(new FileWriter(tmpFile), 32768)) {
+                    for (String listUrl : FILTER_LIST_URLS) {
+                        if (written >= MAX_SYNCED_DOMAINS) break;
+                        HttpURLConnection conn = null;
+                        try {
+                            conn = (HttpURLConnection) new URL(listUrl).openConnection();
+                            conn.setConnectTimeout(7000);
+                            conn.setReadTimeout(12000);
+                            try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()), 16384)) {
+                                String line;
+                                while ((line = reader.readLine()) != null && written < MAX_SYNCED_DOMAINS) {
+                                    String host = parseBlocklistDomain(line);
+                                    if (host != null && !SAFE_MAIN_DOMAINS.contains(host)) {
+                                        bw.write(host);
+                                        bw.newLine();
+                                        written++;
+                                    }
+                                }
+                            }
+                        } catch (Exception ignored) {
+                        } finally {
+                            if (conn != null) conn.disconnect();
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                if (written > 5000) {
+                    if (cacheFile.exists()) cacheFile.delete();
+                    tmpFile.renameTo(cacheFile);
+                    loadHashesFromFile(cacheFile);
+                    int total = adHostHashes.length + trackerHostHashes.length;
+                    uiHandler.post(() -> Toast.makeText(MainActivity.this,
+                            "Filter database synced: " + String.format(Locale.US, "%,d", total) + " rules",
+                            Toast.LENGTH_SHORT).show());
+                } else {
+                    tmpFile.delete();
+                }
+            }
+            enforceLowRamBudget();
+        }).start();
+    }
+
+    private void loadHashesFromFile(File file) {
+        long[] buf = new long[MAX_SYNCED_DOMAINS + CORE_AD_DOMAINS.length];
+        int count = 0;
+        for (String core : CORE_AD_DOMAINS) buf[count++] = fnv1a64(core);
+        try (BufferedReader br = new BufferedReader(new FileReader(file), 16384)) {
+            String line;
+            while ((line = br.readLine()) != null && count < buf.length) {
+                if (!line.isEmpty()) buf[count++] = fnv1a64(line);
+            }
+        } catch (Exception ignored) {}
+        adHostHashes = sortAndCompact(buf, count);
+    }
+
+    private String parseBlocklistDomain(String rawLine) {
+        if (rawLine == null) return null;
+        String s = rawLine.trim().toLowerCase(Locale.US);
+        if (s.isEmpty() || s.startsWith("#") || s.startsWith("!")) return null;
+        int commentIdx = s.indexOf('#');
+        if (commentIdx != -1) s = s.substring(0, commentIdx).trim();
+
+        if (s.startsWith("0.0.0.0") || s.startsWith("127.0.0.1")) {
+            String[] parts = s.split("\\s+");
+            if (parts.length >= 2) s = parts[1];
+            else return null;
+        } else if (s.startsWith("||")) {
+            s = s.substring(2);
+            int caret = s.indexOf('^');
+            if (caret != -1) s = s.substring(0, caret);
+        }
+
+        if (s.equals("localhost") || s.equals("0.0.0.0") || s.equals("127.0.0.1") || !s.contains(".") || s.contains("/")) {
+            return null;
+        }
+        return s;
+    }
+
+    private int classifyBlockedRequest(String host, String fullUrl) {
+        if (host == null || host.isEmpty()) return 0;
+        String cleanHost = host.toLowerCase(Locale.US);
+        if (SAFE_MAIN_DOMAINS.contains(cleanHost)) return 0;
+
+        for (String allowed : allowlistDomains) {
+            if (cleanHost.equals(allowed) || cleanHost.endsWith("." + allowed)) return 0;
+        }
+
+        long[] trkArr = trackerHostHashes;
+        long[] adArr = adHostHashes;
+        String part = cleanHost;
+        while (part.contains(".")) {
+            long h = fnv1a64(part);
+            if (Arrays.binarySearch(trkArr, h) >= 0) return 2;
+            if (Arrays.binarySearch(adArr, h) >= 0) return 1;
+            int dot = part.indexOf('.');
+            part = part.substring(dot + 1);
+        }
+
+        for (String prefix : AD_SUBDOMAIN_PREFIXES) {
+            if (cleanHost.startsWith(prefix)) return 1;
+        }
+
+        if (fullUrl != null) {
+            String lowerUrl = fullUrl.toLowerCase(Locale.US);
+            for (String kw : BLOCKED_URL_KEYWORDS) {
+                if (lowerUrl.contains(kw)) return 1;
+            }
+        }
+        return 0;
+    }
+
+    private WebResourceResponse createBlockedResponse() {
+        InputStream abortStream = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("Blocked by NOVA Shield");
+            }
+        };
+        return new WebResourceResponse("text/plain", "UTF-8", abortStream);
+    }
+
+    private void injectNovaShieldHook(WebView view) {
+        if (!isAdBlockEnabled || isNoJsBypassActive) return;
+        String aggFlag = isAggressiveInterstitialBlock ? "true" : "false";
+        String jsHook = "javascript:(function(){"
+            + "if(window.__novaShieldV6)return;window.__novaShieldV6=true;"
+            + "function checkBlocked(u){"
+            + "try{if(!u)return false;const s=u.toString();"
+            + "if(window.NovaShield&&window.NovaShield.isBlocked(s))return true;}catch(e){}return false;}"
+            + "const origFetch=window.fetch;"
+            + "window.fetch=function(input,init){"
+            + "const u=(typeof input==='string')?input:(input&&input.url?input.url:'');"
+            + "if(checkBlocked(u))return Promise.reject(new TypeError('Blocked by NOVA Shield'));"
+            + "return origFetch.apply(this,arguments).then(function(resp){"
+            + "try{if(u.indexOf('youtubei/v1/player')!==-1||u.indexOf('youtubei/v1/next')!==-1){"
+            + "const clone=resp.clone();return clone.text().then(function(txt){"
+            + "try{let j=JSON.parse(txt);delete j.adPlacements;delete j.playerAds;delete j.adSlots;delete j.adBreakHeartbeatParams;"
+            + "return new Response(JSON.stringify(j),{status:resp.status,statusText:resp.statusText,headers:resp.headers});}"
+            + "catch(e){return resp;}});}}catch(e){}return resp;});};"
+            + "const origOpen=XMLHttpRequest.prototype.open;"
+            + "XMLHttpRequest.prototype.open=function(m,u){"
+            + "if(checkBlocked(u)){this.__blocked=true;}return origOpen.apply(this,arguments);};"
+            + "const origSend=XMLHttpRequest.prototype.send;"
+            + "XMLHttpRequest.prototype.send=function(){"
+            + "if(this.__blocked){this.dispatchEvent(new Event('error'));return;}"
+            + "return origSend.apply(this,arguments);};"
+            + "const origWinOpen=window.open;"
+            + "window.open=function(u){if(!u||checkBlocked(u))return null;return origWinOpen.apply(this,arguments);};"
+            + "const origParse=JSON.parse;"
+            + "JSON.parse=function(t){let r=origParse.apply(this,arguments);"
+            + "if(r&&typeof r==='object'&&(r.adPlacements||r.playerAds||r.adSlots)){"
+            + "delete r.adPlacements;delete r.playerAds;delete r.adSlots;}return r;};"
+            + "var st=document.createElement('style');"
+            + "st.innerHTML='ins.adsbygoogle,.adsbygoogle,[id*=\"google_ads\"],[id*=\"div-gpt-ad\"],[class*=\"ad-banner\"],"
+            + "[class*=\"banner-ad\"],[class*=\"ad-container\"],[class*=\"ad-wrapper\"],[class*=\"ad-slot\"],"
+            + "[class*=\"ad-overlay\"],[class*=\"ad_overlay\"],[class*=\"interstitial\"],[id*=\"interstitial\"],"
+            + "[class*=\"popunder\"],[class*=\"sponsored-ad\"],[class*=\"cookie-banner\"],[id*=\"cookie-consent\"],"
+            + "iframe[src*=\"ads\"],iframe[src*=\"doubleclick\"],iframe[src*=\"googlesyndication\"],"
+            + "ytm-promoted-sparkles-web-renderer,ytm-ad-slot-renderer,ytd-ad-slot-renderer,"
+            + "ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytm-companion-ad-renderer,"
+            + "#masthead-ad,#player-ads,.ytp-ad-overlay-container,.ytp-ad-text-overlay,"
+            + "[data-testid=\"ad-slot\"],[data-testid=\"in-app-message\"]{display:none!important;visibility:hidden!important;height:0!important;}';"
+            + "if(document.head)document.head.appendChild(st);"
+            + "if(" + aggFlag + "){"
+            + "function purgeInterstitials(){"
+            + "try{var nodes=document.querySelectorAll('div,section,aside,iframe');"
+            + "for(var i=0;i<nodes.length;i++){"
+            + "var el=nodes[i];if(!el||el===document.body||el===document.documentElement)continue;"
+            + "var cs=window.getComputedStyle(el);"
+            + "var idc=((el.id||'')+' '+(el.className||'')).toLowerCase();"
+            + "var txt=(el.innerText||'').trim();"
+            + "var isFixed=(cs.position==='fixed'||cs.position==='absolute')&&parseInt(cs.zIndex||0)>=10;"
+            + "var hasAdWord=/close ad|are you 18\\+|confirm.*18\\+|advertisement|sponsored/i.test(txt)&&txt.length<260;"
+            + "var hasAdClass=/interstitial|popunder|ad-overlay|ad_overlay|ad-modal|ad-popup|vignette|banner-ad|adframe/.test(idc);"
+            + "if((isFixed&&hasAdWord)||hasAdClass){"
+            + "el.remove();if(window.NovaShield)window.NovaShield.reportDomAdRemoved();"
+            + "document.body.style.overflow='auto';document.documentElement.style.overflow='auto';}"
+            + "}}catch(e){}}"
+            + "purgeInterstitials();"
+            + "new MutationObserver(purgeInterstitials).observe(document.documentElement,{childList:true,subtree:true});"
+            + "setInterval(purgeInterstitials,700);}"
+            + "const h=location.hostname;"
+            + "if(h.indexOf('youtube.com')!==-1){"
+            + "setInterval(function(){"
+            + "try{const p=document.querySelector('.html5-video-player');"
+            + "const v=document.querySelector('video');"
+            + "const skip=document.querySelector('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button,.ytp-ad-skip-button-slot button');"
+            + "if(skip)skip.click();"
+            + "if(p&&(p.classList.contains('ad-showing')||p.classList.contains('ad-interrupting'))&&v){"
+            + "v.muted=true;if(isFinite(v.duration)&&v.duration>0){v.currentTime=v.duration;}else{v.playbackRate=16;}}"
+            + "}catch(e){}},300);}"
+            + "if(h.indexOf('spotify.com')!==-1){"
+            + "setInterval(function(){"
+            + "try{const titleEl=document.querySelector('[data-testid=\"context-item-info-title\"],[data-testid=\"now-playing-widget\"]');"
+            + "const isAd=titleEl&&/advertisement|spotify\\s*free/i.test(titleEl.textContent||'');"
+            + "document.querySelectorAll('audio,video').forEach(function(m){"
+            + "if(isAd){m.muted=true;if(isFinite(m.duration)&&m.duration>0&&m.duration<65){m.currentTime=m.duration;}}"
+            + "else if(m.muted&&m.__novaMuted){m.muted=false;m.__novaMuted=false;}"
+            + "if(isAd)m.__novaMuted=true;});}catch(e){}},450);}"
+            + "})();";
+        view.evaluateJavascript(jsHook, null);
+    }
+
+    // =========================================================================
+    // TABS, WEBVIEW SETUP & LIFECYCLE
+    // =========================================================================
+
+    private WebView getCurrentWebView() {
+        if (tabs.isEmpty() || currentTabIndex < 0 || currentTabIndex >= tabs.size()) return null;
+        return tabs.get(currentTabIndex);
+    }
+
+    private void createNewTab(String initialUrl) {
+        WebView webView = new WebView(this);
+        webView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        setupWebView(webView);
+        tabs.add(webView);
+        switchToTab(tabs.size() - 1);
+
+        if ("nova://home".equals(initialUrl)) loadNovaHome(webView);
+        else webView.loadUrl(initialUrl);
+        enforceLowRamBudget();
+    }
+
+    private void switchToTab(int index) {
+        if (index < 0 || index >= tabs.size()) return;
+        for (int i = 0; i < tabs.size(); i++) {
+            WebView tab = tabs.get(i);
+            if (i == index) {
+                tab.onResume();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    tab.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+                }
+            } else {
+                tab.onPause();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    tab.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_WAIVED, true);
+                }
+            }
+        }
+        currentTabIndex = index;
+        webContainer.removeAllViews();
+        WebView active = tabs.get(currentTabIndex);
+        webContainer.addView(active);
+        btnTabs.setText(String.valueOf(tabs.size()));
+
+        String url = active.getUrl();
+        if (url == null || url.startsWith("https://nova.browser")) {
+            etUrl.setText("");
+            etUrl.setHint("Search " + searchEngineName + " or enter URL");
+            animateBarsToDp(52);
+        } else {
+            etUrl.setText(url);
+            animateBarsToDp(44);
+        }
+    }
+
+    private void closeTab(int index) {
+        if (index < 0 || index >= tabs.size()) return;
+        WebView removed = tabs.remove(index);
+        String lastUrl = removed.getUrl();
+        if (lastUrl != null && !lastUrl.startsWith("https://nova.browser")) {
+            closedTabs.add(0, lastUrl);
+        }
+        removed.stopLoading();
+        removed.clearHistory();
+        removed.removeAllViews();
+        removed.destroy();
+
+        if (tabs.isEmpty()) createNewTab("nova://home");
+        else switchToTab(Math.min(index, tabs.size() - 1));
+        enforceLowRamBudget();
+    }
+
+    private void setupWebView(WebView webView) {
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setBlockNetworkImage(isDataSaver);
+        settings.setTextZoom(textZoomPercent);
+        settings.setCacheMode(isIncognito ? WebSettings.LOAD_NO_CACHE : WebSettings.LOAD_DEFAULT);
+
+        if (defaultUserAgent == null) defaultUserAgent = settings.getUserAgentString();
+
+        webView.addJavascriptInterface(new NovaShieldBridge(), "NovaShield");
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
+
+        webView.setOnLongClickListener(v -> {
+            WebView.HitTestResult res = webView.getHitTestResult();
+            if (res != null && (res.getType() == WebView.HitTestResult.IMAGE_TYPE
+                    || res.getType() == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) {
+                String imgUrl = res.getExtra();
+                if (imgUrl != null && !imgUrl.isEmpty()) {
+                    showImageLongPressSheet(webView, imgUrl);
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            webView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+                String currentUrl = webView.getUrl();
+                if (currentUrl != null && currentUrl.startsWith("https://nova.browser")) {
+                    animateBarsToDp(52);
+                    return;
+                }
+                int dy = scrollY - oldScrollY;
+                if (scrollY <= dp(10)) animateBarsToDp(44);
+                else if (dy > dp(18)) animateBarsToDp(0);
+                else if (dy < -dp(14)) animateBarsToDp(44);
+            });
+        }
+
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                if (url.startsWith("mailto:")) {
+                    Intent emailIntent = new Intent(Intent.ACTION_SENDTO, Uri.parse(url));
+                    startActivity(Intent.createChooser(emailIntent, "Contact Developer"));
+                    return true;
+                }
+                if (isAdBlockEnabled && classifyBlockedRequest(request.getUrl().getHost(), url) != 0) {
+                    adsBlockedCount++;
+                    sessionBlockedCount++;
+                    pageBlockedCount++;
+                    return true;
+                }
+                if (isHttpsFirst && url.startsWith("http://") && !url.contains("localhost") && !url.contains("127.0.0.1")) {
+                    view.loadUrl(url.replaceFirst("http://", "https://"));
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (view == getCurrentWebView()) {
+                    pageBlockedCount = 0;
+                    if (url.startsWith("https://nova.browser")) {
+                        etUrl.setText("");
+                        btnShield.setText("S");
+                        animateBarsToDp(52);
+                    } else {
+                        etUrl.setText(url);
+                        btnShield.setText(url.startsWith("https://") ? "S" : "!");
+                        animateBarsToDp(44);
+                    }
+                    progressBar.setVisibility(View.VISIBLE);
+                }
+                injectNovaShieldHook(view);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                injectNovaShieldHook(view);
+                if (view == getCurrentWebView()) {
+                    progressBar.setVisibility(View.GONE);
+                }
+                if (!isIncognito && url != null && !url.startsWith("https://nova.browser")) {
+                    saveToHistory(view.getTitle(), url);
+                }
+                enforceLowRamBudget();
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (!isAdBlockEnabled || request.isForMainFrame()) {
+                    return super.shouldInterceptRequest(view, request);
+                }
+                Uri uri = request.getUrl();
+                int kind = classifyBlockedRequest(uri.getHost(), uri.toString());
+                if (kind == 1) {
+                    adsBlockedCount++;
+                    sessionBlockedCount++;
+                    pageBlockedCount++;
+                    return createBlockedResponse();
+                } else if (kind == 2) {
+                    trackersBlockedCount++;
+                    sessionBlockedCount++;
+                    pageBlockedCount++;
+                    return createBlockedResponse();
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+        });
+
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (newProgress > 15 && newProgress < 95) injectNovaShieldHook(view);
+                if (view == getCurrentWebView()) progressBar.setProgress(newProgress);
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                List<String> granted = new ArrayList<>();
+                for (String res : request.getResources()) {
+                    if (PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(res)) granted.add(res);
+                }
+                if (!granted.isEmpty()) request.grant(granted.toArray(new String[0]));
+                else request.deny();
+            }
+        });
+
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            String guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+            if (url != null && url.startsWith("blob:")) {
+                fetchBlobFromWebView(webView, url, guessedName, mimeType);
+                return;
+            }
+            if (url != null && url.startsWith("data:")) {
+                DownloadService.saveDataUrl(this, url, guessedName);
+                return;
+            }
+            String cookie = CookieManager.getInstance().getCookie(url);
+            promptNewDownloadSheet(url, guessedName, contentLength, cookie, webView.getUrl());
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        WebView wv = getCurrentWebView();
+        if (wv != null) {
+            wv.onPause();
+            if (isBatterySaver) wv.pauseTimers();
+        }
+        prefs.edit()
+            .putInt("ads_blocked", adsBlockedCount)
+            .putInt("trackers_blocked", trackersBlockedCount)
+            .apply();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        WebView wv = getCurrentWebView();
+        if (wv != null) {
+            wv.onResume();
+            wv.resumeTimers();
+        }
+        updateDownloadDockBadge();
+        enforceLowRamBudget();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            for (int i = 0; i < tabs.size(); i++) {
+                if (i != currentTabIndex) tabs.get(i).clearCache(false);
+            }
+            System.gc();
+        }
+    }
+
+    private long getUsedRamMbLong() {
+        Runtime rt = Runtime.getRuntime();
+        return (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+    }
+
+    private String getRamUsageMb() {
+        return getUsedRamMbLong() + " MB";
+    }
+
+    private void enforceLowRamBudget() {
+        if (getUsedRamMbLong() >= 15) {
+            uiHandler.post(() -> {
+                for (int i = 0; i < tabs.size(); i++) {
+                    if (i != currentTabIndex) {
+                        tabs.get(i).clearCache(false);
+                        tabs.get(i).onPause();
+                    }
+                }
+            });
+            System.gc();
+        }
+    }
+
+    // =========================================================================
+    // SECONDARY SHEETS & UTILITIES (TABS, BOOKMARKS, HISTORY, PERFORMANCE, ABOUT)
+    // =========================================================================
+
+    private void showTabSwitcherSheet() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("Tabs (" + tabs.size() + ")", "Inactive tabs are suspended automatically", dialog::dismiss));
+
+        ScrollView sc = new ScrollView(this);
+        sc.setVerticalScrollBarEnabled(false);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+        sc.addView(list);
+
+        for (int i = 0; i < tabs.size(); i++) {
+            final int idx = i;
+            WebView wv = tabs.get(i);
+            String title = wv.getTitle();
+            if (title == null || title.isEmpty() || (wv.getUrl() != null && wv.getUrl().startsWith("https://nova.browser"))) {
+                title = "NOVA Home";
+            }
+            String badge = (i == currentTabIndex) ? "ACTIVE" : "IDLE";
+            list.addView(makeListRow((i + 1) + ". " + title, badge, i == currentTabIndex ? getAccentHex() : null, () -> {
+                dialog.dismiss();
+                switchToTab(idx);
+            }));
+            if (i < tabs.size() - 1) list.addView(makeHairline());
+        }
+        body.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams aLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        aLp.setMargins(0, dp(10), 0, 0);
+
+        Button bNew = makePrimaryButton("New Tab");
+        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        l1.setMargins(0, 0, dp(6), 0);
+        bNew.setOnClickListener(v -> { dialog.dismiss(); createNewTab("nova://home"); });
+        actions.addView(bNew, l1);
+
+        if (!closedTabs.isEmpty()) {
+            Button bRe = makeSecondaryButton("Reopen", null);
+            LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+            l2.setMargins(0, 0, dp(6), 0);
+            bRe.setOnClickListener(v -> { dialog.dismiss(); createNewTab(closedTabs.remove(0)); });
+            actions.addView(bRe, l2);
+        }
+
+        if (tabs.size() > 1) {
+            Button bCls = makeSecondaryButton("Close Tab", "#F87171");
+            bCls.setOnClickListener(v -> { dialog.dismiss(); closeTab(currentTabIndex); });
+            actions.addView(bCls, new LinearLayout.LayoutParams(0, dp(38), 1f));
+        }
+
+        body.addView(actions, aLp);
+        dialog.show();
+    }
+
+    private void showBookmarksSheet() {
+        Set<String> saved = new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<>()));
+        List<String> items = new ArrayList<>(saved);
+        WebView wv = getCurrentWebView();
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("Bookmarks", saved.size() + " saved", dialog::dismiss));
+
+        Button btnAdd = makePrimaryButton("Bookmark Current Page");
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        addLp.setMargins(0, 0, 0, dp(10));
+        btnAdd.setOnClickListener(v -> {
+            if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
+                String entry = (wv.getTitle() != null ? wv.getTitle() : "Site") + " | " + wv.getUrl();
+                saved.add(entry);
+                prefs.edit().putStringSet("bookmarks", saved).apply();
+                Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } else {
+                Toast.makeText(this, "Open a webpage first", Toast.LENGTH_SHORT).show();
+            }
+        });
+        body.addView(btnAdd, addLp);
+
+        if (!items.isEmpty()) {
+            ScrollView sc = new ScrollView(this);
+            LinearLayout list = new LinearLayout(this);
+            list.setOrientation(LinearLayout.VERTICAL);
+            list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+            sc.addView(list);
+            for (int i = 0; i < items.size(); i++) {
+                String raw = items.get(i);
+                int sep = raw.lastIndexOf(" | ");
+                String label = sep != -1 ? raw.substring(0, sep) : raw;
+                String url = sep != -1 ? raw.substring(sep + 3) : raw;
+                list.addView(makeListRow(label, null, null, () -> {
+                    dialog.dismiss();
+                    if (wv != null) wv.loadUrl(url);
+                }));
+                if (i < items.size() - 1) list.addView(makeHairline());
+            }
+            body.addView(sc);
+
+            Button btnClear = makeSecondaryButton("Clear All Bookmarks", "#F87171");
+            LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36));
+            cLp.setMargins(0, dp(10), 0, 0);
+            btnClear.setOnClickListener(v -> {
+                prefs.edit().remove("bookmarks").apply();
+                Toast.makeText(this, "Bookmarks cleared", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            });
+            body.addView(btnClear, cLp);
+        }
+        dialog.show();
+    }
+
+    private void showHistorySheet() {
+        Set<String> history = new HashSet<>(prefs.getStringSet("history", new HashSet<>()));
+        List<String> items = new ArrayList<>(history);
+        if (items.isEmpty()) {
+            Toast.makeText(this, "History is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        WebView wv = getCurrentWebView();
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, true);
+        body.addView(makeSheetHeader("History", items.size() + " recent entries", dialog::dismiss));
+
+        ScrollView sc = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(makeRoundedBg(colElevated(), colBorder(), 12, 1));
+        sc.addView(list);
+
+        for (int i = 0; i < items.size(); i++) {
+            String raw = items.get(i);
+            int sep = raw.lastIndexOf(" | ");
+            String label = sep != -1 ? raw.substring(0, sep) : raw;
+            String url = sep != -1 ? raw.substring(sep + 3) : raw;
+            list.addView(makeListRow(label, null, null, () -> {
+                dialog.dismiss();
+                if (wv != null) wv.loadUrl(url);
+            }));
+            if (i < items.size() - 1) list.addView(makeHairline());
+        }
+        body.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        Button btnClear = makeSecondaryButton("Clear History", "#F87171");
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        cLp.setMargins(0, dp(10), 0, 0);
+        btnClear.setOnClickListener(v -> {
+            prefs.edit().remove("history").apply();
+            Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+        });
+        body.addView(btnClear, cLp);
+        dialog.show();
+    }
+
+    private void showPerformanceSheet() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("Memory & Battery", "Runtime resource management", dialog::dismiss));
+
+        LinearLayout card = makeCleanCard();
+        TextView tv = new TextView(this);
+        tv.setText("JVM Heap Used: " + getRamUsageMb() + "\n"
+                + "Filter Index Footprint: ~1.4 MB (64-bit primitive array)\n"
+                + "Active Tabs: 1  •  Suspended Tabs: " + Math.max(0, tabs.size() - 1) + "\n"
+                + "Background Timer Suspension: " + (isBatterySaver ? "Enabled" : "Disabled"));
+        tv.setTextColor(colTextSecondary());
+        tv.setTextSize(12.5f);
+        tv.setLineSpacing(dp(3), 1f);
+        card.addView(tv);
+        body.addView(card);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnBoost = makePrimaryButton("Trim Memory Now");
+        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        l1.setMargins(0, 0, dp(8), 0);
+        btnBoost.setOnClickListener(v -> {
+            for (int i = 0; i < tabs.size(); i++) {
+                tabs.get(i).clearCache(false);
+                if (i != currentTabIndex) tabs.get(i).onPause();
+            }
+            System.gc();
+            Toast.makeText(this, "Memory trimmed (" + getRamUsageMb() + ")", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+        });
+        row.addView(btnBoost, l1);
+
+        Button btnBat = makeSecondaryButton(isBatterySaver ? "Battery Saver: ON" : "Battery Saver: OFF", null);
+        btnBat.setOnClickListener(v -> {
+            isBatterySaver = !isBatterySaver;
+            prefs.edit().putBoolean("battery_saver", isBatterySaver).apply();
+            dialog.dismiss();
+        });
+        row.addView(btnBat, new LinearLayout.LayoutParams(0, dp(38), 1f));
+        body.addView(row);
+        dialog.show();
+    }
+
+    private void showAboutSheet() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        final Dialog dialog = createBottomSheetDialog(body, false);
+        body.addView(makeSheetHeader("About NOVA Browser", "Version " + APP_VERSION, dialog::dismiss));
+
+        LinearLayout card = makeCleanCard();
+        TextView tvInfo = new TextView(this);
+        tvInfo.setText("Developer: " + DEV_NAME + "\n"
+                + "Email: " + DEV_EMAIL + "\n"
+                + "GitHub: @shahalamlaskarofficial\n\n"
+                + "Regular Updates: NOVA Browser receives ongoing updates for filter rules, download stability, and performance. Check GitHub Releases for seamless in-place APK updates.");
+        tvInfo.setTextColor(colTextSecondary());
+        tvInfo.setTextSize(12.5f);
+        tvInfo.setLineSpacing(dp(3), 1f);
+        card.addView(tvInfo);
+        body.addView(card);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnEmail = makePrimaryButton("Contact Developer");
+        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        l1.setMargins(0, 0, dp(8), 0);
+        btnEmail.setOnClickListener(v -> {
+            Intent email = new Intent(Intent.ACTION_SENDTO);
+            email.setData(Uri.parse("mailto:" + DEV_EMAIL + "?subject=" + Uri.encode("NOVA Browser v" + APP_VERSION + " Feedback")));
+            startActivity(Intent.createChooser(email, "Email " + DEV_NAME));
+        });
+        row.addView(btnEmail, l1);
+
+        Button btnReleases = makeSecondaryButton("Check Updates", getAccentHex());
+        btnReleases.setOnClickListener(v -> {
+            WebView wv = getCurrentWebView();
+            if (wv != null) wv.loadUrl(DEV_GITHUB + "/Nova-Browser--advanced-/releases");
+            dialog.dismiss();
+        });
+        row.addView(btnReleases, new LinearLayout.LayoutParams(0, dp(38), 1f));
+        body.addView(row);
+        dialog.show();
+    }
+
+    private void loadUserInput(String input) {
+        if (input.isEmpty()) return;
+        WebView wv = getCurrentWebView();
+        if (wv == null) return;
+        resetTabNoJsMode(wv);
+
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(etUrl.getWindowToken(), 0);
+
+        if ("nova://home".equalsIgnoreCase(input)) loadNovaHome(wv);
+        else if (input.startsWith("http://") || input.startsWith("https://")) wv.loadUrl(input);
+        else if (input.contains(".") && !input.contains(" ")) wv.loadUrl((isHttpsFirst ? "https://" : "http://") + input);
+        else wv.loadUrl(searchEngineUrl + Uri.encode(input));
+    }
+
+    private void showSearchEngineDialog() {
+        String[] engines = {"Google", "Brave Search", "Bing", "Startpage", "DuckDuckGo"};
+        String[] urls = {
+            "https://www.google.com/search?q=", "https://search.brave.com/search?q=",
+            "https://www.bing.com/search?q=", "https://www.startpage.com/do/dsearch?query=",
+            "https://duckduckgo.com/?q="
+        };
+
+        new AlertDialog.Builder(this)
+            .setTitle("Search Engine")
+            .setItems(engines, (d, which) -> {
+                searchEngineName = engines[which];
+                searchEngineUrl = urls[which];
+                prefs.edit().putString("search_name", searchEngineName).putString("search_url", searchEngineUrl).apply();
+                WebView wv = getCurrentWebView();
+                if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) loadNovaHome(wv);
+                Toast.makeText(this, "Search engine set to " + searchEngineName, Toast.LENGTH_SHORT).show();
+            })
+            .show();
+    }
+
+    private void toggleDesktopMode() {
+        isDesktopMode = !isDesktopMode;
+        String ua = isDesktopMode
+            ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+            : defaultUserAgent;
+        for (WebView tab : tabs) tab.getSettings().setUserAgentString(ua);
+        WebView wv = getCurrentWebView();
+        if (wv != null) wv.reload();
+        Toast.makeText(this, "Desktop site " + (isDesktopMode ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleIncognitoMode() {
+        isIncognito = !isIncognito;
+        CookieManager.getInstance().setAcceptCookie(!isIncognito);
+        for (WebView tab : tabs) {
+            tab.getSettings().setCacheMode(isIncognito ? WebSettings.LOAD_NO_CACHE : WebSettings.LOAD_DEFAULT);
+        }
+        applyCleanTheme();
+        Toast.makeText(this, "Private mode " + (isIncognito ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
+    }
+
+    private void showZoomDialog() {
+        String[] sizes = {"75%", "100% (Default)", "125%", "150%"};
+        int[] vals = {75, 100, 125, 150};
+        new AlertDialog.Builder(this)
+            .setTitle("Text Zoom")
+            .setItems(sizes, (d, which) -> {
+                textZoomPercent = vals[which];
+                for (WebView tab : tabs) tab.getSettings().setTextZoom(textZoomPercent);
+            })
+            .show();
+    }
+
+    private void toggleFullScreen() {
+        isFullScreen = !isFullScreen;
+        if (isFullScreen) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            bottomBar.setVisibility(View.GONE);
+            bottomDivider.setVisibility(View.GONE);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            bottomBar.setVisibility(View.VISIBLE);
+            bottomDivider.setVisibility(View.VISIBLE);
+            animateBarsToDp(44);
+        }
+    }
+
+    private void saveToHistory(String title, String url) {
+        Set<String> history = new HashSet<>(prefs.getStringSet("history", new HashSet<>()));
+        String time = new SimpleDateFormat("MM/dd HH:mm", Locale.US).format(new Date());
+        history.add("[" + time + "] " + ((title != null && !title.isEmpty()) ? title : url) + " | " + url);
+        prefs.edit().putStringSet("history", history).apply();
+    }
+
+    private void shareOrCopyUrl(WebView wv) {
+        if (wv == null || wv.getUrl() == null) return;
+        String url = wv.getUrl();
+        String[] actions = {"Copy Page Link", "Share Link", "Generate QR Code"};
+        new AlertDialog.Builder(this)
+            .setTitle("Share")
+            .setItems(actions, (d, which) -> {
+                if (which == 0) {
+                    ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cb != null) {
+                        cb.setPrimaryClip(ClipData.newPlainText("NOVA URL", url));
+                        Toast.makeText(this, "Link copied", Toast.LENGTH_SHORT).show();
+                    }
+                } else if (which == 1) {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType("text/plain");
+                    send.putExtra(Intent.EXTRA_TEXT, url);
+                    startActivity(Intent.createChooser(send, "Share via NOVA Browser"));
+                } else {
+                    wv.loadUrl("https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=" + Uri.encode(url));
+                }
+            })
+            .show();
+    }
+
+    private void clearBrowserData(WebView wv) {
+        if (wv != null) {
+            wv.clearCache(true);
+            wv.clearHistory();
+        }
+        CookieManager.getInstance().removeAllCookies(null);
+        prefs.edit().remove("history").apply();
+        System.gc();
+        Toast.makeText(this, "Cache, cookies, and history cleared", Toast.LENGTH_SHORT).show();
+    }
+}
