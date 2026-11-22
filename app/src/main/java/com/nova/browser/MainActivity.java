@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -28,6 +29,7 @@ import android.provider.MediaStore;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -58,11 +60,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -75,6 +83,7 @@ import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -85,6 +94,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -96,9 +106,17 @@ public class MainActivity extends AppCompatActivity {
     private static final String DEV_NAME = "Shah Alam Laskar";
     private static final String DEV_EMAIL = "shahalamlaskar.official@gmail.com";
     private static final String DEV_GITHUB = "https://github.com/shahalamlaskarofficial";
-    private static final int MAX_SYNCED_DOMAINS = 180000;
+    private static final int MAX_SYNCED_DOMAINS = 190000;
 
-    // Persistent Static Turbo Download Engine (survives navigation & backgrounding)
+    // Theme Constants
+    private static final String THEME_MIDNIGHT = "midnight";
+    private static final String THEME_AMOLED = "amoled";
+    private static final String THEME_VIOLET = "violet";
+    private static final String THEME_EMERALD = "emerald";
+    private static final String THEME_CRIMSON = "crimson";
+    private static final String THEME_LIGHT = "light";
+
+    // Persistent Static Turbo Download Engine
     private static final ExecutorService DOWNLOAD_EXECUTOR = Executors.newFixedThreadPool(4);
     private static final List<TurboDownloadTask> TURBO_DOWNLOADS = new CopyOnWriteArrayList<>();
 
@@ -137,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
         int renderedStatus;
     }
 
-    // JS Bridge allowing window.fetch & XHR to query the full 150,000+ domain database synchronously
     public class NovaShieldBridge {
         @JavascriptInterface
         public boolean isBlocked(String url) {
@@ -156,6 +173,21 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         }
+
+        @JavascriptInterface
+        public void reportDomAdRemoved() {
+            adsBlockedCount++;
+        }
+
+        @JavascriptInterface
+        public void openCustomizePage() {
+            uiHandler.post(MainActivity.this::showCustomizeThemeDialog);
+        }
+
+        @JavascriptInterface
+        public void openTempMailPage() {
+            uiHandler.post(MainActivity.this::showTempMailDialog);
+        }
     }
 
     private FrameLayout webContainer;
@@ -173,12 +205,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean isDesktopMode = false;
     private boolean isIncognito = false;
     private boolean isAdBlockEnabled = true;
+    private boolean isAggressiveInterstitialBlock = true;
     private boolean isHttpsFirst = true;
     private boolean isDataSaver = false;
     private boolean isBatterySaver = true;
-    private boolean isDarkTheme = true;
     private boolean isFullScreen = false;
-    private boolean barsVisible = true;
+    private String currentTheme = THEME_MIDNIGHT;
+    private int currentBarHeightDp = 56;
     private int textZoomPercent = 100;
     private String defaultUserAgent;
 
@@ -193,15 +226,15 @@ public class MainActivity extends AppCompatActivity {
     private final Set<String> blockedTrackerHosts = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    // Safe core sites that must never be false-positive blocked by heuristics
+    private ActivityResultLauncher<String> wallpaperPickerLauncher;
+
     private static final Set<String> SAFE_MAIN_DOMAINS = new HashSet<>(Arrays.asList(
         "nova.browser", "google.com", "www.google.com", "youtube.com", "m.youtube.com",
         "www.youtube.com", "open.spotify.com", "github.com", "chatgpt.com",
         "wikipedia.org", "reddit.com", "testfile.org", "fast.com",
-        "adblock.turtlecute.org", "canyoublockit.com", "superadblocktest.com"
+        "adblock.turtlecute.org", "canyoublockit.com", "superadblocktest.com", "api.mail.tm"
     ));
 
-    // Built-in High-Priority Ad Domains (Active immediately before remote lists load)
     private static final String[] CORE_AD_DOMAINS = {
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
         "adservice.google.com", "ads.youtube.com", "adtago.s3.amazonaws.com",
@@ -234,7 +267,6 @@ public class MainActivity extends AppCompatActivity {
         "contextweb.com", "pulsepoint.com", "spotxchange.com", "springserve.com"
     };
 
-    // Built-in Trackers, Analytics, Error Loggers & Telemetry
     private static final String[] CORE_TRACKER_DOMAINS = {
         "google-analytics.com", "analytics.google.com", "click.googleanalytics.com",
         "googletagmanager.com", "googletagservices.com", "analyticsengine.s3.amazonaws.com",
@@ -270,7 +302,6 @@ public class MainActivity extends AppCompatActivity {
         "hubspot.com", "hs-analytics.net", "hs-scripts.com", "marketo.net", "pardot.com"
     };
 
-    // High-Precision Ad Subdomain Prefixes for 95%+ Zero-Day Ad & Tracker Catching
     private static final String[] AD_SUBDOMAIN_PREFIXES = {
         "ad.", "ads.", "ad1.", "ad2.", "adserver.", "adservice.", "adsystem.", "adtech.",
         "adclick.", "advert.", "adverts.", "advertising.", "banner.", "banners.",
@@ -278,7 +309,6 @@ public class MainActivity extends AppCompatActivity {
         "metrics.", "analytics.", "pixel.", "beacon.", "stats.", "click.", "clicks."
     };
 
-    // High-Precision Path Rules for YouTube, Spotify & General Ad Endpoints
     private static final String[] BLOCKED_URL_KEYWORDS = {
         "/pagead/", "/ads.js", "/adframe", "/adserver", "/adscript", "/banner_ad",
         "/popunder", "/interstitial", "/googlesyndication", "/doubleclick",
@@ -292,7 +322,6 @@ public class MainActivity extends AppCompatActivity {
         "spotify.com/melody/v1/ad", "adeventtracker.spotify"
     };
 
-    // 4 High-Coverage Blocklist Sources (150,000+ domains combined)
     private static final String[] FILTER_LIST_URLS = {
         "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=nohtml&showintro=0&mimetype=plaintext",
         "https://adaway.org/hosts.txt",
@@ -311,12 +340,22 @@ public class MainActivity extends AppCompatActivity {
         searchEngineName = prefs.getString("search_name", "Google");
         searchEngineUrl = prefs.getString("search_url", "https://www.google.com/search?q=");
         isAdBlockEnabled = prefs.getBoolean("adblock_enabled", true);
+        isAggressiveInterstitialBlock = prefs.getBoolean("aggressive_interstitial", true);
         isBatterySaver = prefs.getBoolean("battery_saver", true);
+        currentTheme = prefs.getString("nova_theme", THEME_MIDNIGHT);
         allowlistDomains = new HashSet<>(prefs.getStringSet("allowlist", new HashSet<>()));
+
+        wallpaperPickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        saveCustomWallpaperFromUri(uri);
+                    }
+                });
 
         blockedAdHosts.addAll(Arrays.asList(CORE_AD_DOMAINS));
         blockedTrackerHosts.addAll(Arrays.asList(CORE_TRACKER_DOMAINS));
-        loadCachedAndSyncFilterLists();
+        loadCachedAndSyncFilterLists(false);
 
         rootLayout = findViewById(R.id.rootLayout);
         topBar = findViewById(R.id.topBar);
@@ -351,7 +390,7 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-        btnShield.setOnClickListener(v -> { pulseButton(v); showPrivacyDashboard(); });
+        btnShield.setOnClickListener(v -> { pulseButton(v); showOrganizedShieldDashboard(); });
         btnTabs.setOnClickListener(v -> { pulseButton(v); showTabSwitcher(); });
         btnMenu.setOnClickListener(v -> { pulseButton(v); showMainMenu(); });
 
@@ -434,7 +473,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // LIQUID GLASS THEME & SMOOTH SCROLL AUTO-HIDE ANIMATION
+    // LIQUID GLASS THEME ENGINE, AMOLED, CUSTOM WALLPAPER & DYNAMIC BAR ANIMATION
     // =========================================================================
 
     private int dp(int v) {
@@ -442,41 +481,47 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void pulseButton(View v) {
-        v.animate().scaleX(0.88f).scaleY(0.88f).setDuration(75)
-            .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).setDuration(110).start())
+        v.animate().scaleX(0.88f).scaleY(0.88f).setDuration(70)
+            .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).setDuration(105).start())
             .start();
     }
 
-    private void animateBarsVisibility(boolean show) {
-        if (isFullScreen || barsVisible == show) return;
-        barsVisible = show;
+    // Smoothly resizes top & bottom bars: 56dp on Home -> 44dp inside a website -> 0dp when scrolling down
+    private void animateBarsToDp(int targetDp) {
+        if (isFullScreen || currentBarHeightDp == targetDp) return;
+        currentBarHeightDp = targetDp;
 
-        final int targetH = show ? dp(48) : 0;
-        final int targetMargin = show ? dp(4) : 0;
-        final int startH = topBar.getLayoutParams().height;
+        final int targetPx = dp(targetDp);
+        final int startPx = topBar.getLayoutParams().height;
+        final int targetMargin = targetDp == 0 ? 0 : (targetDp >= 52 ? dp(5) : dp(3));
+        final float targetScale = targetDp >= 52 ? 1.0f : (targetDp == 0 ? 0.85f : 0.90f);
 
-        ValueAnimator anim = ValueAnimator.ofInt(startH, targetH);
-        anim.setDuration(220);
+        ValueAnimator anim = ValueAnimator.ofInt(startPx, targetPx);
+        anim.setDuration(230);
         anim.setInterpolator(new DecelerateInterpolator());
         anim.addUpdateListener(va -> {
             int val = (int) va.getAnimatedValue();
-            float frac = dp(48) > 0 ? (val / (float) dp(48)) : 1f;
+            float alpha = targetDp == 0 ? (val / (float) Math.max(1, dp(44))) : 1f;
 
             LinearLayout.LayoutParams topLp = (LinearLayout.LayoutParams) topBar.getLayoutParams();
             topLp.height = val;
-            topLp.topMargin = Math.round(targetMargin * frac);
-            topLp.bottomMargin = Math.round(targetMargin * frac);
+            topLp.topMargin = targetMargin;
+            topLp.bottomMargin = targetMargin;
             topBar.setLayoutParams(topLp);
-            topBar.setAlpha(frac);
+            topBar.setAlpha(Math.min(1f, Math.max(0f, alpha)));
 
             LinearLayout.LayoutParams botLp = (LinearLayout.LayoutParams) bottomBar.getLayoutParams();
             botLp.height = val;
-            botLp.topMargin = Math.round(targetMargin * frac);
-            botLp.bottomMargin = Math.round(targetMargin * frac);
+            botLp.topMargin = targetMargin;
+            botLp.bottomMargin = targetMargin;
             bottomBar.setLayoutParams(botLp);
-            bottomBar.setAlpha(frac);
+            bottomBar.setAlpha(Math.min(1f, Math.max(0f, alpha)));
         });
         anim.start();
+
+        for (Button b : new Button[]{btnShield, btnTabs, btnMenu, btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
+            b.animate().scaleX(targetScale).scaleY(targetScale).setDuration(220).start();
+        }
     }
 
     private GradientDrawable makeGlassDrawable(int topColor, int bottomColor, int strokeColor, int radiusDp, int strokeDp) {
@@ -490,42 +535,22 @@ public class MainActivity extends AppCompatActivity {
         return gd;
     }
 
+    private String getAccentHex() {
+        switch (currentTheme) {
+            case THEME_AMOLED: return "#38BDF8";
+            case THEME_VIOLET: return "#C084FC";
+            case THEME_EMERALD: return "#34D399";
+            case THEME_CRIMSON: return "#FB7185";
+            case THEME_LIGHT: return "#0284C7";
+            default: return "#38BDF8";
+        }
+    }
+
     private void applyLiquidGlassTheme() {
-        if (isDarkTheme) {
-            rootLayout.setBackground(new GradientDrawable(
-                    GradientDrawable.Orientation.TL_BR,
-                    new int[]{Color.parseColor("#050B18"), Color.parseColor("#0E1D3B"), Color.parseColor("#071022")}));
+        boolean isLight = THEME_LIGHT.equals(currentTheme);
+        String accent = getAccentHex();
 
-            int barTop = isIncognito ? Color.parseColor("#CC3B0764") : Color.parseColor("#B8162644");
-            int barBot = isIncognito ? Color.parseColor("#CC1E0938") : Color.parseColor("#B80C172E");
-            int rim = isIncognito ? Color.parseColor("#77C084FC") : Color.parseColor("#557DD3FC");
-
-            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
-            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
-            layoutFind.setBackground(makeGlassDrawable(barTop, barBot, rim, 18, 1));
-
-            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#88071024"), Color.parseColor("#88112244"), Color.parseColor("#4438BDF8"), 16, 1));
-            etUrl.setTextColor(Color.parseColor("#F8FAFC"));
-            etUrl.setHintTextColor(Color.parseColor("#94A3B8"));
-
-            etFind.setBackground(makeGlassDrawable(Color.parseColor("#99071024"), Color.parseColor("#99112244"), Color.parseColor("#4438BDF8"), 14, 1));
-            etFind.setTextColor(Color.parseColor("#F8FAFC"));
-
-            styleGlassPillButton(btnShield, "#3338BDF8", "#1A38BDF8", "#557DD3FC");
-            styleGlassPillButton(btnTabs, "#3338BDF8", "#1A818CF8", "#557DD3FC");
-            styleGlassPillButton(btnMenu, "#26FFFFFF", "#12FFFFFF", "#38FFFFFF");
-
-            for (Button dockBtn : new Button[]{btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
-                styleGlassPillButton(dockBtn, "#20FFFFFF", "#0DFFFFFF", "#2B7DD3FC");
-            }
-            btnBack.setTextColor(Color.parseColor("#F8FAFC"));
-            btnForward.setTextColor(Color.parseColor("#F8FAFC"));
-            btnReload.setTextColor(Color.parseColor("#F8FAFC"));
-            btnMenu.setTextColor(Color.parseColor("#F8FAFC"));
-            btnHome.setTextColor(Color.parseColor("#38BDF8"));
-            btnBookmarks.setTextColor(Color.parseColor("#FACC15"));
-            btnDownloads.setTextColor(Color.parseColor("#38BDF8"));
-        } else {
+        if (isLight) {
             rootLayout.setBackground(new GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
                     new int[]{Color.parseColor("#DBEAFE"), Color.parseColor("#F0F9FF"), Color.parseColor("#E0E7FF")}));
@@ -534,11 +559,11 @@ public class MainActivity extends AppCompatActivity {
             int barBot = isIncognito ? Color.parseColor("#DDD8B4FE") : Color.parseColor("#B8E0F2FE");
             int rim = Color.parseColor("#AAFFFFFF");
 
-            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
-            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 20, 1));
+            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 22, 1));
+            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 22, 1));
             layoutFind.setBackground(makeGlassDrawable(barTop, barBot, rim, 18, 1));
 
-            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#EEFFFFFF"), Color.parseColor("#DDF1F5F9"), Color.parseColor("#660284C7"), 16, 1));
+            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#EEFFFFFF"), Color.parseColor("#DDF1F5F9"), Color.parseColor("#660284C7"), 18, 1));
             etUrl.setTextColor(Color.parseColor("#0F172A"));
             etUrl.setHintTextColor(Color.parseColor("#64748B"));
 
@@ -556,9 +581,83 @@ public class MainActivity extends AppCompatActivity {
             btnForward.setTextColor(Color.parseColor("#0F172A"));
             btnReload.setTextColor(Color.parseColor("#0F172A"));
             btnMenu.setTextColor(Color.parseColor("#0F172A"));
-            btnHome.setTextColor(Color.parseColor("#0284C7"));
+            btnTabs.setTextColor(Color.parseColor(accent));
+            btnHome.setTextColor(Color.parseColor(accent));
             btnBookmarks.setTextColor(Color.parseColor("#CA8A04"));
-            btnDownloads.setTextColor(Color.parseColor("#0284C7"));
+            btnDownloads.setTextColor(Color.parseColor(accent));
+        } else {
+            int bg1, bg2, bg3, barTop, barBot, rim;
+            if (THEME_AMOLED.equals(currentTheme)) {
+                bg1 = bg2 = bg3 = Color.parseColor("#000000");
+                barTop = Color.parseColor("#E60A0A0A");
+                barBot = Color.parseColor("#E6000000");
+                rim = Color.parseColor("#4438BDF8");
+            } else if (THEME_VIOLET.equals(currentTheme)) {
+                bg1 = Color.parseColor("#0E061E");
+                bg2 = Color.parseColor("#1D0B3B");
+                bg3 = Color.parseColor("#090414");
+                barTop = Color.parseColor("#BD2A1454");
+                barBot = Color.parseColor("#BD160A2E");
+                rim = Color.parseColor("#66C084FC");
+            } else if (THEME_EMERALD.equals(currentTheme)) {
+                bg1 = Color.parseColor("#031512");
+                bg2 = Color.parseColor("#072C24");
+                bg3 = Color.parseColor("#020E0C");
+                barTop = Color.parseColor("#BD0C3B31");
+                barBot = Color.parseColor("#BD06211B");
+                rim = Color.parseColor("#6634D399");
+            } else if (THEME_CRIMSON.equals(currentTheme)) {
+                bg1 = Color.parseColor("#1A050B");
+                bg2 = Color.parseColor("#330B17");
+                bg3 = Color.parseColor("#120307");
+                barTop = Color.parseColor("#BD42101F");
+                barBot = Color.parseColor("#BD240811");
+                rim = Color.parseColor("#66FB7185");
+            } else {
+                bg1 = Color.parseColor("#050B18");
+                bg2 = Color.parseColor("#0E1D3B");
+                bg3 = Color.parseColor("#071022");
+                barTop = Color.parseColor("#B8162644");
+                barBot = Color.parseColor("#B80C172E");
+                rim = Color.parseColor("#557DD3FC");
+            }
+
+            if (isIncognito) {
+                barTop = Color.parseColor("#CC3B0764");
+                barBot = Color.parseColor("#CC1E0938");
+                rim = Color.parseColor("#77C084FC");
+            }
+
+            rootLayout.setBackground(new GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    new int[]{bg1, bg2, bg3}));
+
+            topBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 22, 1));
+            bottomBar.setBackground(makeGlassDrawable(barTop, barBot, rim, 22, 1));
+            layoutFind.setBackground(makeGlassDrawable(barTop, barBot, rim, 18, 1));
+
+            etUrl.setBackground(makeGlassDrawable(Color.parseColor("#88050914"), Color.parseColor("#88111A2E"), rim, 18, 1));
+            etUrl.setTextColor(Color.parseColor("#F8FAFC"));
+            etUrl.setHintTextColor(Color.parseColor("#94A3B8"));
+
+            etFind.setBackground(makeGlassDrawable(Color.parseColor("#99050914"), Color.parseColor("#99111A2E"), rim, 14, 1));
+            etFind.setTextColor(Color.parseColor("#F8FAFC"));
+
+            styleGlassPillButton(btnShield, "#2AFFFFFF", "#12FFFFFF", "#44FFFFFF");
+            styleGlassPillButton(btnTabs, "#2EFFFFFF", "#14FFFFFF", "#55FFFFFF");
+            styleGlassPillButton(btnMenu, "#24FFFFFF", "#10FFFFFF", "#38FFFFFF");
+
+            for (Button dockBtn : new Button[]{btnBack, btnForward, btnReload, btnHome, btnBookmarks, btnDownloads}) {
+                styleGlassPillButton(dockBtn, "#20FFFFFF", "#0DFFFFFF", "#2BFFFFFF");
+            }
+            btnBack.setTextColor(Color.parseColor("#F8FAFC"));
+            btnForward.setTextColor(Color.parseColor("#F8FAFC"));
+            btnReload.setTextColor(Color.parseColor("#F8FAFC"));
+            btnMenu.setTextColor(Color.parseColor("#F8FAFC"));
+            btnTabs.setTextColor(Color.parseColor(accent));
+            btnHome.setTextColor(Color.parseColor(accent));
+            btnBookmarks.setTextColor(Color.parseColor("#FACC15"));
+            btnDownloads.setTextColor(Color.parseColor(accent));
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -573,9 +672,706 @@ public class MainActivity extends AppCompatActivity {
                 Color.parseColor(topHex),
                 Color.parseColor(botHex),
                 Color.parseColor(strokeHex),
-                13,
+                14,
                 1));
     }
+
+    private void saveCustomWallpaperFromUri(Uri uri) {
+        new Thread(() -> {
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                Bitmap raw = BitmapFactory.decodeStream(in);
+                if (raw == null) return;
+                int maxDim = 1080;
+                float scale = Math.min(1f, (float) maxDim / Math.max(raw.getWidth(), raw.getHeight()));
+                Bitmap scaled = Bitmap.createScaledBitmap(raw,
+                        Math.max(1, Math.round(raw.getWidth() * scale)),
+                        Math.max(1, Math.round(raw.getHeight() * scale)),
+                        true);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.JPEG, 78, baos);
+                String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+
+                File wpFile = new File(getFilesDir(), "nova_home_wallpaper.b64");
+                try (FileWriter fw = new FileWriter(wpFile)) {
+                    fw.write(b64);
+                }
+
+                uiHandler.post(() -> {
+                    Toast.makeText(this, "🖼️ Custom Wallpaper Applied!", Toast.LENGTH_SHORT).show();
+                    WebView wv = getCurrentWebView();
+                    if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
+                        loadNovaHome(wv);
+                    }
+                });
+            } catch (Exception e) {
+                uiHandler.post(() -> Toast.makeText(this, "Could not load wallpaper image", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private String readCustomWallpaperBase64() {
+        File wpFile = new File(getFilesDir(), "nova_home_wallpaper.b64");
+        if (!wpFile.exists()) return null;
+        try (BufferedReader br = new BufferedReader(new FileReader(wpFile))) {
+            return br.readLine();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void showCustomizeThemeDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(makeGlassDrawable(
+                Color.parseColor("#F20A1428"),
+                Color.parseColor("#F2050B18"),
+                Color.parseColor("#6638BDF8"),
+                26, 1));
+        outer.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        LinearLayout hdr = new LinearLayout(this);
+        hdr.setOrientation(LinearLayout.HORIZONTAL);
+        hdr.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🎨 Home Appearance & Wallpapers");
+        tvTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextSize(17f);
+        hdr.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnClose = createLargeGlassButton("✕", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        hdr.addView(btnClose, new LinearLayout.LayoutParams(dp(40), dp(38)));
+        outer.addView(hdr);
+
+        ScrollView sc = new ScrollView(this);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(0, dp(12), 0, 0);
+        sc.addView(body);
+
+        // Card 1: Theme Color Presets
+        LinearLayout themeCard = createGlassCard();
+        TextView tvThemeLbl = new TextView(this);
+        tvThemeLbl.setText("🌈 Select Browser & Home Theme");
+        tvThemeLbl.setTextColor(Color.parseColor("#F8FAFC"));
+        tvThemeLbl.setTypeface(null, Typeface.BOLD);
+        tvThemeLbl.setTextSize(14f);
+        tvThemeLbl.setPadding(0, 0, 0, dp(10));
+        themeCard.addView(tvThemeLbl);
+
+        String[][] themes = {
+            {"🌊 Midnight Glass", THEME_MIDNIGHT, "#0E2954", "#06142E"},
+            {"🖤 Pure AMOLED Black", THEME_AMOLED, "#141414", "#000000"},
+            {"💜 Cyber Violet", THEME_VIOLET, "#4C1D95", "#2E1065"},
+            {"💚 Emerald Matrix", THEME_EMERALD, "#065F46", "#022C22"},
+            {"❤️ Crimson Eclipse", THEME_CRIMSON, "#881337", "#4C0519"},
+            {"❄️ Arctic Light Glass", THEME_LIGHT, "#E0F2FE", "#BAE6FD"}
+        };
+
+        for (int i = 0; i < themes.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rLp.setMargins(0, 0, 0, dp(8));
+
+            for (int j = 0; j < 2 && (i + j) < themes.length; j++) {
+                final String label = themes[i + j][0];
+                final String key = themes[i + j][1];
+                final String c1 = themes[i + j][2];
+                final String c2 = themes[i + j][3];
+                String txtCol = THEME_LIGHT.equals(key) ? "#0F172A" : "#F8FAFC";
+                String prefix = currentTheme.equals(key) ? "✓ " : "";
+
+                Button btn = createLargeGlassButton(prefix + label, c1, c2, txtCol);
+                LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, dp(46), 1f);
+                if (j == 0) bLp.setMargins(0, 0, dp(8), 0);
+                btn.setOnClickListener(v -> {
+                    currentTheme = key;
+                    prefs.edit().putString("nova_theme", key).apply();
+                    applyLiquidGlassTheme();
+                    WebView wv = getCurrentWebView();
+                    if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
+                        loadNovaHome(wv);
+                    }
+                    dialog.dismiss();
+                    Toast.makeText(this, "Theme Applied: " + label, Toast.LENGTH_SHORT).show();
+                });
+                row.addView(btn, bLp);
+            }
+            themeCard.addView(row, rLp);
+        }
+        body.addView(themeCard);
+
+        // Card 2: Custom Homepage Wallpaper
+        LinearLayout wpCard = createGlassCard();
+        TextView tvWpLbl = new TextView(this);
+        tvWpLbl.setText("🖼️ Custom Homepage Wallpaper");
+        tvWpLbl.setTextColor(Color.parseColor("#F8FAFC"));
+        tvWpLbl.setTypeface(null, Typeface.BOLD);
+        tvWpLbl.setTextSize(14f);
+        wpCard.addView(tvWpLbl);
+
+        TextView tvWpSub = new TextView(this);
+        tvWpSub.setText("Pick any photo from your phone gallery to display behind the frosted Liquid Glass home screen.");
+        tvWpSub.setTextColor(Color.parseColor("#94A3B8"));
+        tvWpSub.setTextSize(12f);
+        tvWpSub.setPadding(0, dp(4), 0, dp(12));
+        wpCard.addView(tvWpSub);
+
+        Button btnPickWp = createLargeGlassButton("🖼️ Choose Image from Gallery", "#0284C7", "#4F46E5", "#FFFFFF");
+        LinearLayout.LayoutParams pickLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
+        pickLp.setMargins(0, 0, 0, dp(8));
+        btnPickWp.setOnClickListener(v -> {
+            dialog.dismiss();
+            wallpaperPickerLauncher.launch("image/*");
+        });
+        wpCard.addView(btnPickWp, pickLp);
+
+        Button btnClearWp = createLargeGlassButton("🗑️ Reset / Remove Wallpaper", "#33EF4444", "#1AEF4444", "#FCA5A5");
+        btnClearWp.setOnClickListener(v -> {
+            File wpFile = new File(getFilesDir(), "nova_home_wallpaper.b64");
+            if (wpFile.exists()) wpFile.delete();
+            Toast.makeText(this, "Wallpaper Reset to Theme Default", Toast.LENGTH_SHORT).show();
+            WebView wv = getCurrentWebView();
+            if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
+                loadNovaHome(wv);
+            }
+            dialog.dismiss();
+        });
+        wpCard.addView(btnClearWp, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        body.addView(wpCard);
+
+        outer.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.setPadding(dp(12), dp(16), dp(12), dp(16));
+        wrap.addView(outer);
+        dialog.setContentView(wrap);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setDimAmount(0.72f);
+        }
+        dialog.show();
+    }
+
+    // =========================================================================
+    // NOVA SHIELD v5 (ORGANIZED LIQUID GLASS MENU + INTERSTITIAL / POPUP KILLER)
+    // =========================================================================
+
+    private void showOrganizedShieldDashboard() {
+        WebView wv = getCurrentWebView();
+        String currentUrl = (wv != null && wv.getUrl() != null) ? wv.getUrl() : "nova://home";
+        String host = Uri.parse(currentUrl).getHost();
+        boolean isHttps = currentUrl.startsWith("https://");
+        int total = adsBlockedCount + trackersBlockedCount;
+        String saved = String.format(Locale.US, "%.2f MB", (total * 18.5) / 1024.0);
+        int rulesLoaded = blockedAdHosts.size() + blockedTrackerHosts.size();
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(makeGlassDrawable(
+                Color.parseColor("#F20A1428"),
+                Color.parseColor("#F2050B18"),
+                Color.parseColor(isAdBlockEnabled ? "#7738BDF8" : "#77EF4444"),
+                26, 1));
+        outer.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Header
+        LinearLayout hdr = new LinearLayout(this);
+        hdr.setOrientation(LinearLayout.HORIZONTAL);
+        hdr.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🛡️ NOVA Shield v5");
+        tvTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextSize(18f);
+        hdr.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnClose = createLargeGlassButton("✕", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        hdr.addView(btnClose, new LinearLayout.LayoutParams(dp(40), dp(38)));
+        outer.addView(hdr);
+
+        // Status Pill Card
+        LinearLayout statusCard = createGlassCard();
+        TextView tvStatus = new TextView(this);
+        tvStatus.setText((isAdBlockEnabled ? "🟢 PROTECTION ACTIVE" : "🔴 PROTECTION PAUSED")
+                + " • " + rulesLoaded + " Filter Rules");
+        tvStatus.setTextColor(Color.parseColor(isAdBlockEnabled ? "#4ADE80" : "#F87171"));
+        tvStatus.setTypeface(null, Typeface.BOLD);
+        tvStatus.setTextSize(13.5f);
+        statusCard.addView(tvStatus);
+
+        TextView tvSub = new TextView(this);
+        tvSub.setText((isHttps ? "🔒 Secure HTTPS Connection" : "⚠️ Local / Unencrypted")
+                + "\n▶️ YouTube & 🎵 Spotify Ad-Shield: ON\n🚫 Interstitial & 18+ Pop-Up Killer: "
+                + (isAggressiveInterstitialBlock ? "ON" : "OFF"));
+        tvSub.setTextColor(Color.parseColor("#94A3B8"));
+        tvSub.setTextSize(12f);
+        tvSub.setPadding(0, dp(6), 0, 0);
+        statusCard.addView(tvSub);
+        outer.addView(statusCard);
+
+        // 3-Column Stats Card
+        LinearLayout statsRow = new LinearLayout(this);
+        statsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams srLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        srLp.setMargins(0, 0, 0, dp(12));
+
+        statsRow.addView(makeMiniStatCard(String.valueOf(adsBlockedCount), "Ads Blocked", "#38BDF8"),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        statsRow.addView(makeMiniStatCard(String.valueOf(trackersBlockedCount), "Trackers", "#C084FC"),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        statsRow.addView(makeMiniStatCard(saved, "Data Saved", "#4ADE80"),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        outer.addView(statsRow, srLp);
+
+        // Toggle Controls
+        Button btnToggleShield = createLargeGlassButton(
+                isAdBlockEnabled ? "⏸ Pause NOVA Shield" : "🛡️ Enable NOVA Shield",
+                isAdBlockEnabled ? "#33EF4444" : "#059669",
+                isAdBlockEnabled ? "#1AEF4444" : "#047857",
+                isAdBlockEnabled ? "#FCA5A5" : "#ECFDF5");
+        LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
+        tLp.setMargins(0, 0, 0, dp(8));
+        btnToggleShield.setOnClickListener(v -> {
+            isAdBlockEnabled = !isAdBlockEnabled;
+            prefs.edit().putBoolean("adblock_enabled", isAdBlockEnabled).apply();
+            if (wv != null) wv.reload();
+            dialog.dismiss();
+            Toast.makeText(this, "NOVA Shield " + (isAdBlockEnabled ? "Enabled" : "Paused"), Toast.LENGTH_SHORT).show();
+        });
+        outer.addView(btnToggleShield, tLp);
+
+        Button btnTogglePop = createLargeGlassButton(
+                isAggressiveInterstitialBlock ? "⚡ Interstitial & Pop-Up Killer: ON" : "⚡ Interstitial & Pop-Up Killer: OFF",
+                "#3338BDF8", "#1A6366F1", "#E0F2FE");
+        btnTogglePop.setOnClickListener(v -> {
+            isAggressiveInterstitialBlock = !isAggressiveInterstitialBlock;
+            prefs.edit().putBoolean("aggressive_interstitial", isAggressiveInterstitialBlock).apply();
+            if (wv != null) wv.reload();
+            dialog.dismiss();
+        });
+        outer.addView(btnTogglePop, tLp);
+
+        LinearLayout bottomRow = new LinearLayout(this);
+        bottomRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnSync = createLargeGlassButton("🔄 Update Lists", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        sLp.setMargins(0, 0, dp(8), 0);
+        btnSync.setOnClickListener(v -> {
+            Toast.makeText(this, "Syncing 180,000+ ad & tracker rules...", Toast.LENGTH_SHORT).show();
+            loadCachedAndSyncFilterLists(true);
+            dialog.dismiss();
+        });
+        bottomRow.addView(btnSync, sLp);
+
+        if (host != null && !host.contains("nova.browser")) {
+            boolean allowlisted = allowlistDomains.contains(host);
+            Button btnAllow = createLargeGlassButton(
+                    allowlisted ? "Untrust Site" : "Trust Site",
+                    "#33FACC15", "#1AFACC15", "#FDE047");
+            btnAllow.setOnClickListener(v -> {
+                if (allowlisted) allowlistDomains.remove(host);
+                else allowlistDomains.add(host);
+                prefs.edit().putStringSet("allowlist", allowlistDomains).apply();
+                if (wv != null) wv.reload();
+                dialog.dismiss();
+            });
+            bottomRow.addView(btnAllow, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        }
+        outer.addView(bottomRow);
+
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.setPadding(dp(12), dp(16), dp(12), dp(16));
+        wrap.addView(outer);
+        dialog.setContentView(wrap);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setDimAmount(0.72f);
+        }
+        dialog.show();
+    }
+
+    private LinearLayout makeMiniStatCard(String value, String label, String colorHex) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(8), dp(10), dp(8), dp(10));
+        box.setBackground(makeGlassDrawable(
+                Color.parseColor("#B0162544"),
+                Color.parseColor("#B00B1426"),
+                Color.parseColor("#3D7DD3FC"),
+                14, 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+
+        TextView tvVal = new TextView(this);
+        tvVal.setText(value);
+        tvVal.setTextColor(Color.parseColor(colorHex));
+        tvVal.setTypeface(null, Typeface.BOLD);
+        tvVal.setTextSize(15f);
+        tvVal.setGravity(Gravity.CENTER);
+        box.addView(tvVal);
+
+        TextView tvLbl = new TextView(this);
+        tvLbl.setText(label);
+        tvLbl.setTextColor(Color.parseColor("#94A3B8"));
+        tvLbl.setTextSize(10.5f);
+        tvLbl.setGravity(Gravity.CENTER);
+        box.addView(tvLbl);
+
+        LinearLayout holder = new LinearLayout(this);
+        holder.addView(box, lp);
+        return holder;
+    }
+
+    // =========================================================================
+    // LOGIN / SIGN-UP WALL BYPASSER
+    // =========================================================================
+
+    private void showLoginBypassDialog(WebView wv) {
+        if (wv == null || wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser")) {
+            Toast.makeText(this, "Open a website first to bypass its login wall", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] methods = {
+            "🔓 Strip Login / Sign-Up Modals & Blur (Instant)",
+            "🤖 Reload as Search Crawler (Bypass Hard Login/Paywall)",
+            "📖 Extract Clean Text (Reader Bypass)"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("🔓 NOVA Login & Sign-Up Wall Bypass")
+            .setItems(methods, (d, which) -> {
+                if (which == 0) {
+                    String jsBypass = "javascript:(function(){"
+                        + "document.querySelectorAll('*').forEach(function(el){"
+                        + "var st=window.getComputedStyle(el);"
+                        + "var txt=(el.innerText||'').toLowerCase();"
+                        + "var idc=((el.id||'')+' '+(el.className||'')).toLowerCase();"
+                        + "var isWall=/login|signin|sign-in|signup|sign-up|register|paywall|auth-modal|gate|subscribe-modal/.test(idc);"
+                        + "if((st.position==='fixed'||st.position==='sticky')&&(isWall||parseInt(st.zIndex||0)>500)){"
+                        + "if(el.tagName!=='HEADER'&&el.tagName!=='NAV'){el.remove();}}"
+                        + "if(st.filter&&st.filter.indexOf('blur')!==-1){el.style.filter='none';}"
+                        + "});"
+                        + "document.documentElement.style.setProperty('overflow','auto','important');"
+                        + "document.body.style.setProperty('overflow','auto','important');"
+                        + "document.body.style.setProperty('position','static','important');"
+                        + "})();";
+                    wv.evaluateJavascript(jsBypass, null);
+                    Toast.makeText(this, "🔓 Login modals, blurs & scroll locks removed!", Toast.LENGTH_SHORT).show();
+                } else if (which == 1) {
+                    wv.getSettings().setUserAgentString("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
+                    wv.reload();
+                    Toast.makeText(this, "🤖 Reloading with Crawler UA to bypass gate...", Toast.LENGTH_SHORT).show();
+                } else {
+                    toggleReaderMode(wv);
+                }
+            })
+            .setNegativeButton("Close", null)
+            .show();
+    }
+
+    // =========================================================================
+    // NOVA TEMP MAIL SERVICE (UNIQUE EMAIL PER USER + LIVE INBOX & OTP READER)
+    // =========================================================================
+
+    private void showTempMailDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(makeGlassDrawable(
+                Color.parseColor("#F20A1428"),
+                Color.parseColor("#F2050B18"),
+                Color.parseColor("#6638BDF8"),
+                26, 1));
+        outer.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        LinearLayout hdr = new LinearLayout(this);
+        hdr.setOrientation(LinearLayout.HORIZONTAL);
+        hdr.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("📧 NOVA Temp Mail");
+        tvTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextSize(18f);
+        hdr.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnClose = createLargeGlassButton("✕", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        hdr.addView(btnClose, new LinearLayout.LayoutParams(dp(40), dp(38)));
+        outer.addView(hdr);
+
+        // Address Card
+        LinearLayout addrCard = createGlassCard();
+        TextView tvAddrLbl = new TextView(this);
+        tvAddrLbl.setText("Your Unique Disposable Email:");
+        tvAddrLbl.setTextColor(Color.parseColor("#94A3B8"));
+        tvAddrLbl.setTextSize(11.5f);
+        addrCard.addView(tvAddrLbl);
+
+        TextView tvEmail = new TextView(this);
+        String savedEmail = prefs.getString("temp_mail_addr", "");
+        tvEmail.setText(savedEmail.isEmpty() ? "Generating unique address..." : savedEmail);
+        tvEmail.setTextColor(Color.parseColor("#38BDF8"));
+        tvEmail.setTypeface(null, Typeface.BOLD);
+        tvEmail.setTextSize(15f);
+        tvEmail.setPadding(0, dp(4), 0, dp(10));
+        addrCard.addView(tvEmail);
+
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnCopy = createLargeGlassButton("📋 Copy Email", "#0284C7", "#4F46E5", "#FFFFFF");
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        cLp.setMargins(0, 0, dp(8), 0);
+        btnCopy.setOnClickListener(v -> {
+            String em = prefs.getString("temp_mail_addr", "");
+            if (!em.isEmpty()) {
+                ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cb != null) {
+                    cb.setPrimaryClip(ClipData.newPlainText("NOVA Temp Mail", em));
+                    Toast.makeText(this, "Copied: " + em, Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        btnRow.addView(btnCopy, cLp);
+
+        Button btnNew = createLargeGlassButton("🔄 New Email", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        btnRow.addView(btnNew, new LinearLayout.LayoutParams(0, dp(40), 1f));
+        addrCard.addView(btnRow);
+        outer.addView(addrCard);
+
+        // Inbox Header
+        LinearLayout inboxHdr = new LinearLayout(this);
+        inboxHdr.setOrientation(LinearLayout.HORIZONTAL);
+        inboxHdr.setGravity(Gravity.CENTER_VERTICAL);
+        inboxHdr.setPadding(dp(4), dp(4), dp(4), dp(8));
+
+        TextView tvInboxLbl = new TextView(this);
+        tvInboxLbl.setText("📥 Live Inbox (OTPs & Verification Links)");
+        tvInboxLbl.setTextColor(Color.parseColor("#F8FAFC"));
+        tvInboxLbl.setTypeface(null, Typeface.BOLD);
+        tvInboxLbl.setTextSize(13.5f);
+        inboxHdr.addView(tvInboxLbl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnRefresh = createLargeGlassButton("↻ Refresh", "#2B38BDF8", "#146366F1", "#7DD3FC");
+        inboxHdr.addView(btnRefresh, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)));
+        outer.addView(inboxHdr);
+
+        ScrollView scInbox = new ScrollView(this);
+        LinearLayout inboxContainer = new LinearLayout(this);
+        inboxContainer.setOrientation(LinearLayout.VERTICAL);
+        scInbox.addView(inboxContainer);
+        outer.addView(scInbox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        Runnable refreshAction = () -> fetchTempMailInbox(inboxContainer);
+        btnRefresh.setOnClickListener(v -> refreshAction.run());
+        btnNew.setOnClickListener(v -> createFreshTempMailAccount(tvEmail, inboxContainer));
+
+        if (savedEmail.isEmpty() || prefs.getString("temp_mail_token", "").isEmpty()) {
+            createFreshTempMailAccount(tvEmail, inboxContainer);
+        } else {
+            refreshAction.run();
+        }
+
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.setPadding(dp(10), dp(18), dp(10), dp(18));
+        wrap.addView(outer);
+        dialog.setContentView(wrap);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int maxH = (int) (getResources().getDisplayMetrics().heightPixels * 0.80f);
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, maxH);
+            dialog.getWindow().setDimAmount(0.72f);
+        }
+        dialog.show();
+    }
+
+    private String httpJsonRequest(String urlStr, String method, String jsonBody, String bearerToken) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+        conn.setRequestMethod(method);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        conn.setRequestProperty("Accept", "application/json");
+        if (bearerToken != null && !bearerToken.isEmpty()) {
+            conn.setRequestProperty("Authorization", "Bearer " + bearerToken);
+        }
+        if (jsonBody != null) {
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        int code = conn.getResponseCode();
+        InputStream stream = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (stream != null) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(stream))) {
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+            }
+        }
+        conn.disconnect();
+        if (code < 200 || code >= 300) {
+            throw new IOException("HTTP " + code);
+        }
+        return sb.toString();
+    }
+
+    private void createFreshTempMailAccount(TextView tvEmail, LinearLayout inboxContainer) {
+        uiHandler.post(() -> {
+            tvEmail.setText("Creating unique mailbox...");
+            inboxContainer.removeAllViews();
+        });
+        new Thread(() -> {
+            try {
+                String domJson = httpJsonRequest("https://api.mail.tm/domains", "GET", null, null);
+                JSONObject domObj = new JSONObject(domJson);
+                JSONArray members = domObj.getJSONArray("hydra:member");
+                String domain = members.getJSONObject(0).getString("domain");
+
+                String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+                Random rnd = new Random();
+                StringBuilder user = new StringBuilder("nova");
+                for (int i = 0; i < 8; i++) user.append(chars.charAt(rnd.nextInt(chars.length())));
+                String email = user + "@" + domain;
+                String pass = "NovaPass" + rnd.nextInt(999999);
+
+                JSONObject creds = new JSONObject();
+                creds.put("address", email);
+                creds.put("password", pass);
+
+                httpJsonRequest("https://api.mail.tm/accounts", "POST", creds.toString(), null);
+                String tokJson = httpJsonRequest("https://api.mail.tm/token", "POST", creds.toString(), null);
+                String token = new JSONObject(tokJson).getString("token");
+
+                prefs.edit()
+                    .putString("temp_mail_addr", email)
+                    .putString("temp_mail_token", token)
+                    .apply();
+
+                uiHandler.post(() -> {
+                    tvEmail.setText(email);
+                    Toast.makeText(this, "📧 Unique Temp Mail Ready!", Toast.LENGTH_SHORT).show();
+                    fetchTempMailInbox(inboxContainer);
+                });
+            } catch (Exception e) {
+                uiHandler.post(() -> {
+                    tvEmail.setText("Tap 🔄 New Email to retry");
+                    Toast.makeText(this, "Mail server busy — tap New Email to retry", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void fetchTempMailInbox(LinearLayout inboxContainer) {
+        String token = prefs.getString("temp_mail_token", "");
+        if (token.isEmpty()) return;
+
+        uiHandler.post(() -> {
+            inboxContainer.removeAllViews();
+            TextView tvLoad = new TextView(this);
+            tvLoad.setText("Checking inbox...");
+            tvLoad.setTextColor(Color.parseColor("#94A3B8"));
+            tvLoad.setPadding(dp(8), dp(12), dp(8), dp(12));
+            inboxContainer.addView(tvLoad);
+        });
+
+        new Thread(() -> {
+            try {
+                String res = httpJsonRequest("https://api.mail.tm/messages", "GET", null, token);
+                JSONArray msgs = new JSONObject(res).getJSONArray("hydra:member");
+
+                uiHandler.post(() -> {
+                    inboxContainer.removeAllViews();
+                    if (msgs.length() == 0) {
+                        LinearLayout empty = createGlassCard();
+                        TextView tvE = new TextView(this);
+                        tvE.setText("Inbox is empty.\nUse your email above on any signup form, then tap ↻ Refresh to read OTPs or verification links!");
+                        tvE.setTextColor(Color.parseColor("#94A3B8"));
+                        tvE.setTextSize(12.5f);
+                        empty.addView(tvE);
+                        inboxContainer.addView(empty);
+                        return;
+                    }
+                    for (int i = 0; i < msgs.length(); i++) {
+                        try {
+                            JSONObject m = msgs.getJSONObject(i);
+                            String id = m.getString("id");
+                            String subj = m.optString("subject", "(No Subject)");
+                            String from = m.has("from") ? m.getJSONObject("from").optString("address", "Sender") : "Sender";
+                            String intro = m.optString("intro", "");
+
+                            LinearLayout card = createGlassCard();
+                            TextView tvS = new TextView(this);
+                            tvS.setText("✉️ " + subj);
+                            tvS.setTextColor(Color.parseColor("#F8FAFC"));
+                            tvS.setTypeface(null, Typeface.BOLD);
+                            tvS.setTextSize(13.5f);
+                            card.addView(tvS);
+
+                            TextView tvF = new TextView(this);
+                            tvF.setText("From: " + from + (intro.isEmpty() ? "" : "\n" + intro));
+                            tvF.setTextColor(Color.parseColor("#94A3B8"));
+                            tvF.setTextSize(11.5f);
+                            tvF.setPadding(0, dp(4), 0, 0);
+                            card.addView(tvF);
+
+                            card.setOnClickListener(v -> openTempMailMessage(id, subj, from, token));
+                            inboxContainer.addView(card);
+                        } catch (Exception ignored) {}
+                    }
+                });
+            } catch (Exception e) {
+                uiHandler.post(() -> Toast.makeText(this, "Could not refresh inbox", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void openTempMailMessage(String msgId, String subject, String from, String token) {
+        new Thread(() -> {
+            try {
+                String res = httpJsonRequest("https://api.mail.tm/messages/" + msgId, "GET", null, token);
+                JSONObject obj = new JSONObject(res);
+                String textBody = obj.optString("text", "(Empty message)");
+                uiHandler.post(() -> new AlertDialog.Builder(this)
+                    .setTitle(subject)
+                    .setMessage("From: " + from + "\n\n" + textBody)
+                    .setPositiveButton("📋 Copy Message", (d, w) -> {
+                        ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (cb != null) {
+                            cb.setPrimaryClip(ClipData.newPlainText("Temp Mail Body", textBody));
+                            Toast.makeText(this, "Message Copied!", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .setNegativeButton("Close", null)
+                    .show());
+            } catch (Exception e) {
+                uiHandler.post(() -> Toast.makeText(this, "Failed to open email", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    // =========================================================================
+    // FILTER LIST ENGINE & AGGRESSIVE INTERSTITIAL / POPUP KILLER
+    // =========================================================================
 
     private void updateDownloadDockBadge() {
         int running = 0;
@@ -590,8 +1386,8 @@ public class MainActivity extends AppCompatActivity {
                 btnDownloads.setTextColor(Color.parseColor("#4ADE80"));
             } else {
                 btnDownloads.setText("⬇");
-                btnDownloads.setTextSize(16f);
-                btnDownloads.setTextColor(Color.parseColor(isDarkTheme ? "#38BDF8" : "#0284C7"));
+                btnDownloads.setTextSize(17f);
+                btnDownloads.setTextColor(Color.parseColor(getAccentHex()));
             }
         });
     }
@@ -609,9 +1405,7 @@ public class MainActivity extends AppCompatActivity {
         WebView wv = getCurrentWebView();
         if (wv != null) {
             wv.onPause();
-            if (isBatterySaver) {
-                wv.pauseTimers();
-            }
+            if (isBatterySaver) wv.pauseTimers();
         }
         prefs.edit()
             .putInt("ads_blocked", adsBlockedCount)
@@ -635,23 +1429,16 @@ public class MainActivity extends AppCompatActivity {
         super.onTrimMemory(level);
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             for (int i = 0; i < tabs.size(); i++) {
-                if (i != currentTabIndex) {
-                    tabs.get(i).clearCache(false);
-                }
+                if (i != currentTabIndex) tabs.get(i).clearCache(false);
             }
             System.gc();
         }
     }
 
-    // =========================================================================
-    // NOVA SHIELD v4 (150,000+ DOMAIN ENGINE + YOUTUBE/SPOTIFY/BANNER BLOCKER)
-    // =========================================================================
-
-    private void loadCachedAndSyncFilterLists() {
+    private void loadCachedAndSyncFilterLists(boolean forceRefresh) {
         new Thread(() -> {
-            File cacheFile = new File(getFilesDir(), "nova_shield_v4_hosts.txt");
-            // 1. Instantly load cached 150,000+ hosts from disk if available
-            if (cacheFile.exists() && cacheFile.length() > 10000) {
+            File cacheFile = new File(getFilesDir(), "nova_shield_v5_hosts.txt");
+            if (!forceRefresh && cacheFile.exists() && cacheFile.length() > 10000) {
                 try (BufferedReader br = new BufferedReader(new FileReader(cacheFile))) {
                     String line;
                     while ((line = br.readLine()) != null && blockedAdHosts.size() < MAX_SYNCED_DOMAINS) {
@@ -660,9 +1447,8 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception ignored) {}
             }
 
-            // 2. Refresh from all 4 major blocklists if cache is missing or older than 24h
             long ageMs = System.currentTimeMillis() - cacheFile.lastModified();
-            if (!cacheFile.exists() || cacheFile.length() < 10000 || ageMs > 86400000L) {
+            if (forceRefresh || !cacheFile.exists() || cacheFile.length() < 10000 || ageMs > 86400000L) {
                 Set<String> freshDomains = new HashSet<>();
                 for (String listUrl : FILTER_LIST_URLS) {
                     if (freshDomains.size() >= MAX_SYNCED_DOMAINS) break;
@@ -693,7 +1479,7 @@ public class MainActivity extends AppCompatActivity {
 
                     int totalRules = blockedAdHosts.size() + blockedTrackerHosts.size();
                     uiHandler.post(() -> Toast.makeText(MainActivity.this,
-                            "🛡️ NOVA Shield v4 Ready: " + totalRules + " ad & tracker rules active",
+                            "🛡️ NOVA Shield v5 Ready: " + totalRules + " rules active",
                             Toast.LENGTH_SHORT).show());
                 }
             }
@@ -704,11 +1490,9 @@ public class MainActivity extends AppCompatActivity {
         if (rawLine == null) return null;
         String s = rawLine.trim().toLowerCase(Locale.US);
         if (s.isEmpty() || s.startsWith("#") || s.startsWith("!")) return null;
-
         int commentIdx = s.indexOf('#');
         if (commentIdx != -1) s = s.substring(0, commentIdx).trim();
 
-        // Handle hosts format: "0.0.0.0 ads.example.com" or "127.0.0.1 ads.example.com"
         if (s.startsWith("0.0.0.0") || s.startsWith("127.0.0.1")) {
             String[] parts = s.split("\\s+");
             if (parts.length >= 2) s = parts[1];
@@ -732,12 +1516,9 @@ public class MainActivity extends AppCompatActivity {
         if (SAFE_MAIN_DOMAINS.contains(cleanHost)) return 0;
 
         for (String allowed : allowlistDomains) {
-            if (cleanHost.equals(allowed) || cleanHost.endsWith("." + allowed)) {
-                return 0;
-            }
+            if (cleanHost.equals(allowed) || cleanHost.endsWith("." + allowed)) return 0;
         }
 
-        // 1. Exact & parent-domain O(1) lookup against 150,000+ database
         String part = cleanHost;
         while (part.contains(".")) {
             if (blockedTrackerHosts.contains(part)) return 2;
@@ -746,20 +1527,14 @@ public class MainActivity extends AppCompatActivity {
             part = part.substring(dot + 1);
         }
 
-        // 2. High-precision ad/tracker subdomain prefix catch (e.g. ads.site.com, telemetry.site.com)
         for (String prefix : AD_SUBDOMAIN_PREFIXES) {
-            if (cleanHost.startsWith(prefix)) {
-                return 1;
-            }
+            if (cleanHost.startsWith(prefix)) return 1;
         }
 
-        // 3. URL path & YouTube/Spotify ad endpoint keywords
         if (fullUrl != null) {
             String lowerUrl = fullUrl.toLowerCase(Locale.US);
             for (String kw : BLOCKED_URL_KEYWORDS) {
-                if (lowerUrl.contains(kw)) {
-                    return 1;
-                }
+                if (lowerUrl.contains(kw)) return 1;
             }
         }
         return 0;
@@ -769,7 +1544,7 @@ public class MainActivity extends AppCompatActivity {
         InputStream abortStream = new InputStream() {
             @Override
             public int read() throws IOException {
-                throw new IOException("Blocked by NOVA Shield v4");
+                throw new IOException("Blocked by NOVA Shield v5");
             }
         };
         return new WebResourceResponse("text/plain", "UTF-8", abortStream);
@@ -777,8 +1552,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void injectNovaShieldHook(WebView view) {
         if (!isAdBlockEnabled) return;
+        String aggFlag = isAggressiveInterstitialBlock ? "true" : "false";
         String jsHook = "javascript:(function(){"
-            + "if(window.__novaShieldV4)return;window.__novaShieldV4=true;"
+            + "if(window.__novaShieldV5)return;window.__novaShieldV5=true;"
             + "function checkBlocked(u){"
             + "try{if(!u)return false;const s=u.toString();"
             + "if(window.NovaShield&&window.NovaShield.isBlocked(s))return true;}catch(e){}return false;}"
@@ -808,13 +1584,32 @@ public class MainActivity extends AppCompatActivity {
             + "var st=document.createElement('style');"
             + "st.innerHTML='ins.adsbygoogle,.adsbygoogle,[id*=\"google_ads\"],[id*=\"div-gpt-ad\"],[class*=\"ad-banner\"],"
             + "[class*=\"banner-ad\"],[class*=\"ad-container\"],[class*=\"ad-wrapper\"],[class*=\"ad-slot\"],"
-            + "[class*=\"sponsored-ad\"],[class*=\"popunder\"],[class*=\"interstitial-ad\"],[class*=\"cookie-banner\"],"
-            + "[id*=\"cookie-consent\"],iframe[src*=\"ads\"],iframe[src*=\"doubleclick\"],iframe[src*=\"googlesyndication\"],"
+            + "[class*=\"ad-overlay\"],[class*=\"ad_overlay\"],[class*=\"interstitial\"],[id*=\"interstitial\"],"
+            + "[class*=\"popunder\"],[class*=\"sponsored-ad\"],[class*=\"cookie-banner\"],[id*=\"cookie-consent\"],"
+            + "iframe[src*=\"ads\"],iframe[src*=\"doubleclick\"],iframe[src*=\"googlesyndication\"],"
             + "ytm-promoted-sparkles-web-renderer,ytm-ad-slot-renderer,ytd-ad-slot-renderer,"
             + "ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytm-companion-ad-renderer,"
             + "#masthead-ad,#player-ads,.ytp-ad-overlay-container,.ytp-ad-text-overlay,"
             + "[data-testid=\"ad-slot\"],[data-testid=\"in-app-message\"]{display:none!important;visibility:hidden!important;height:0!important;}';"
             + "if(document.head)document.head.appendChild(st);"
+            + "if(" + aggFlag + "){"
+            + "function purgeInterstitials(){"
+            + "try{var nodes=document.querySelectorAll('div,section,aside,iframe');"
+            + "for(var i=0;i<nodes.length;i++){"
+            + "var el=nodes[i];if(!el||el===document.body||el===document.documentElement)continue;"
+            + "var cs=window.getComputedStyle(el);"
+            + "var idc=((el.id||'')+' '+(el.className||'')).toLowerCase();"
+            + "var txt=(el.innerText||'').trim();"
+            + "var isFixed=(cs.position==='fixed'||cs.position==='absolute')&&parseInt(cs.zIndex||0)>=10;"
+            + "var hasAdWord=/close ad|are you 18\\+|confirm.*18\\+|advertisement|sponsored/i.test(txt)&&txt.length<260;"
+            + "var hasAdClass=/interstitial|popunder|ad-overlay|ad_overlay|ad-modal|ad-popup|vignette|banner-ad|adframe/.test(idc);"
+            + "if((isFixed&&hasAdWord)||hasAdClass){"
+            + "el.remove();if(window.NovaShield)window.NovaShield.reportDomAdRemoved();"
+            + "document.body.style.overflow='auto';document.documentElement.style.overflow='auto';}"
+            + "}}catch(e){}}"
+            + "purgeInterstitials();"
+            + "new MutationObserver(purgeInterstitials).observe(document.documentElement,{childList:true,subtree:true});"
+            + "setInterval(purgeInterstitials,700);}"
             + "const h=location.hostname;"
             + "if(h.indexOf('youtube.com')!==-1){"
             + "setInterval(function(){"
@@ -838,7 +1633,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // TAB ENGINE & LIQUID GLASS HOME PAGE
+    // TAB ENGINE & CLEAN LIQUID GLASS HOMEPAGE (NO DEVELOPER CARD ON HOME)
     // =========================================================================
 
     private WebView getCurrentWebView() {
@@ -886,14 +1681,15 @@ public class MainActivity extends AppCompatActivity {
         WebView active = tabs.get(currentTabIndex);
         webContainer.addView(active);
         btnTabs.setText("[" + tabs.size() + "]");
-        animateBarsVisibility(true);
 
         String url = active.getUrl();
         if (url == null || url.startsWith("https://nova.browser")) {
             etUrl.setText("");
             etUrl.setHint("Search " + searchEngineName + " or type URL...");
+            animateBarsToDp(56);
         } else {
             etUrl.setText(url);
+            animateBarsToDp(44);
         }
     }
 
@@ -927,34 +1723,52 @@ public class MainActivity extends AppCompatActivity {
         int totalBlocked = adsBlockedCount + trackersBlockedCount;
         int rulesCount = blockedAdHosts.size() + blockedTrackerHosts.size();
         String dataSavedKb = String.format(Locale.US, "%.1f KB", totalBlocked * 18.5);
-        String bg = isDarkTheme
-                ? "radial-gradient(circle at 20% 15%, #163060 0%, #091224 55%, #050914 100%)"
-                : "radial-gradient(circle at 20% 15%, #BAE6FD 0%, #E0F2FE 55%, #EEF2FF 100%)";
-        String glass = isDarkTheme ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.65)";
-        String border = isDarkTheme ? "rgba(125,211,252,0.28)" : "rgba(255,255,255,0.9)";
-        String text = isDarkTheme ? "#F8FAFC" : "#0F172A";
-        String sub = isDarkTheme ? "#94A3B8" : "#475569";
+        String accent = getAccentHex();
+        boolean isLight = THEME_LIGHT.equals(currentTheme);
+
+        String customWpB64 = readCustomWallpaperBase64();
+        String bgCss;
+        if (customWpB64 != null && !customWpB64.isEmpty()) {
+            bgCss = "linear-gradient(rgba(5,10,22,0.52),rgba(5,10,22,0.68)),url('data:image/jpeg;base64," + customWpB64 + "') center/cover no-repeat fixed";
+        } else if (THEME_AMOLED.equals(currentTheme)) {
+            bgCss = "#000000";
+        } else if (THEME_VIOLET.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 20% 15%, #3B0764 0%, #15062B 55%, #070210 100%)";
+        } else if (THEME_EMERALD.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 20% 15%, #064E3B 0%, #03221C 55%, #010D0A 100%)";
+        } else if (THEME_CRIMSON.equals(currentTheme)) {
+            bgCss = "radial-gradient(circle at 20% 15%, #881337 0%, #2D0714 55%, #0F0206 100%)";
+        } else if (isLight) {
+            bgCss = "radial-gradient(circle at 20% 15%, #BAE6FD 0%, #E0F2FE 55%, #EEF2FF 100%)";
+        } else {
+            bgCss = "radial-gradient(circle at 20% 15%, #163060 0%, #091224 55%, #050914 100%)";
+        }
+
+        String glass = (isLight && customWpB64 == null) ? "rgba(255,255,255,0.68)" : "rgba(255,255,255,0.09)";
+        String border = (isLight && customWpB64 == null) ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.22)";
+        String text = (isLight && customWpB64 == null) ? "#0F172A" : "#F8FAFC";
+        String sub = (isLight && customWpB64 == null) ? "#475569" : "#CBD5E1";
 
         String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
             + "<style>"
-            + "body{margin:0;min-height:100vh;padding:20px 14px 28px;font-family:-apple-system,sans-serif;background:" + bg + ";color:" + text + ";text-align:center;box-sizing:border-box;}"
-            + ".logo{font-size:32px;font-weight:900;letter-spacing:2px;background:linear-gradient(120deg,#7DD3FC,#818CF8,#E879F9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-top:6px;}"
-            + ".tag{font-size:12px;color:" + sub + ";margin:6px 0 18px;}"
-            + ".glass{background:" + glass + ";backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid " + border + ";box-shadow:0 8px 28px rgba(0,0,0,0.26);}"
-            + ".search-box{display:flex;border-radius:26px;padding:6px 12px;margin:0 auto 18px;max-width:480px;}"
+            + "body{margin:0;min-height:100vh;padding:24px 14px 28px;font-family:-apple-system,sans-serif;background:" + bgCss + ";color:" + text + ";text-align:center;box-sizing:border-box;}"
+            + ".logo{font-size:34px;font-weight:900;letter-spacing:2.5px;background:linear-gradient(120deg," + accent + ",#818CF8,#E879F9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-top:8px;}"
+            + ".tag{font-size:12px;color:" + sub + ";margin:6px 0 20px;}"
+            + ".glass{background:" + glass + ";backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid " + border + ";box-shadow:0 8px 28px rgba(0,0,0,0.28);}"
+            + ".search-box{display:flex;border-radius:26px;padding:6px 12px;margin:0 auto 20px;max-width:480px;}"
             + ".search-box input{flex:1;background:transparent;border:none;color:" + text + ";font-size:15px;outline:none;padding:8px;}"
-            + ".search-box button{background:linear-gradient(135deg,#38BDF8,#6366F1);color:#FFFFFF;border:none;border-radius:18px;padding:8px 18px;font-weight:800;font-size:13px;}"
-            + ".stats{display:flex;justify-content:space-around;border-radius:20px;padding:14px 6px;margin:0 auto 18px;max-width:480px;}"
-            + ".stat-num{font-size:17px;font-weight:800;color:#38BDF8;}"
+            + ".search-box button{background:linear-gradient(135deg," + accent + ",#6366F1);color:#FFFFFF;border:none;border-radius:18px;padding:8px 18px;font-weight:800;font-size:13px;}"
+            + ".stats{display:flex;justify-content:space-around;border-radius:20px;padding:14px 6px;margin:0 auto 20px;max-width:480px;}"
+            + ".stat-num{font-size:17px;font-weight:800;color:" + accent + ";}"
             + ".stat-lbl{font-size:10px;color:" + sub + ";margin-top:3px;}"
-            + ".grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:480px;margin:0 auto 20px;}"
+            + ".grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:480px;margin:0 auto 22px;}"
             + ".tile{padding:14px 6px;border-radius:18px;text-decoration:none;color:" + text + ";font-size:11.5px;font-weight:700;display:block;}"
             + ".icon{font-size:22px;display:block;margin-bottom:5px;}"
-            + ".dev-card{border-radius:18px;padding:12px;max-width:480px;margin:0 auto;font-size:12px;color:" + sub + ";}"
-            + ".dev-card a{color:#38BDF8;text-decoration:none;font-weight:700;}"
+            + ".quick-row{display:flex;gap:10px;max-width:480px;margin:0 auto;}"
+            + ".qbtn{flex:1;padding:12px;border-radius:18px;color:" + text + ";font-size:12.5px;font-weight:700;border:none;cursor:pointer;}"
             + "</style></head><body>"
             + "<div class='logo'>NOVA BROWSER</div>"
-            + "<div class='tag'>Shield v4 (" + rulesCount + " Rules) &bull; YT &amp; Spotify AdBlock</div>"
+            + "<div class='tag'>Shield v5 (" + rulesCount + " Rules) &bull; Turbo Engine</div>"
             + "<form class='search-box glass' onsubmit=\"window.location.href='" + searchEngineUrl + "'+encodeURIComponent(document.getElementById('q').value);return false;\">"
             + "<input id='q' type='text' placeholder='Search with " + searchEngineName + " or enter URL...'/>"
             + "<button type='submit'>GO</button></form>"
@@ -974,14 +1788,16 @@ public class MainActivity extends AppCompatActivity {
             + "<a class='tile glass' href='https://www.reddit.com'><span class='icon'>🔥</span>Reddit</a>"
             + "<a class='tile glass' href='https://fast.com'><span class='icon'>⚡</span>Speed</a>"
             + "</div>"
-            + "<div class='dev-card glass'>Crafted by <b>" + DEV_NAME + "</b><br/>"
-            + "Contact: <a href='mailto:" + DEV_EMAIL + "'>" + DEV_EMAIL + "</a></div>"
+            + "<div class='quick-row'>"
+            + "<button class='qbtn glass' onclick='window.NovaShield.openCustomizePage()'>🎨 Theme &amp; Wallpaper</button>"
+            + "<button class='qbtn glass' onclick='window.NovaShield.openTempMailPage()'>📧 Temp Mail</button>"
+            + "</div>"
             + "</body></html>";
 
         webView.loadDataWithBaseURL("https://nova.browser", html, "text/html", "UTF-8", null);
         etUrl.setText("");
         etUrl.setHint("Search " + searchEngineName + " or type URL...");
-        animateBarsVisibility(true);
+        animateBarsToDp(56);
     }
 
     private void setupWebView(WebView webView) {
@@ -1005,25 +1821,23 @@ public class MainActivity extends AppCompatActivity {
             defaultUserAgent = settings.getUserAgentString();
         }
 
-        // Attach synchronous 150,000+ domain JS Shield Bridge
         webView.addJavascriptInterface(new NovaShieldBridge(), "NovaShield");
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
 
-        // Smooth scroll auto-hide for top & bottom Liquid Glass bars
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             webView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
                 String currentUrl = webView.getUrl();
                 if (currentUrl != null && currentUrl.startsWith("https://nova.browser")) {
-                    animateBarsVisibility(true);
+                    animateBarsToDp(56);
                     return;
                 }
                 int dy = scrollY - oldScrollY;
-                if (scrollY <= dp(12)) {
-                    animateBarsVisibility(true);
-                } else if (dy > dp(16)) {
-                    animateBarsVisibility(false);
-                } else if (dy < -dp(12)) {
-                    animateBarsVisibility(true);
+                if (scrollY <= dp(10)) {
+                    animateBarsToDp(44);
+                } else if (dy > dp(18)) {
+                    animateBarsToDp(0);
+                } else if (dy < -dp(14)) {
+                    animateBarsToDp(44);
                 }
             });
         }
@@ -1037,7 +1851,6 @@ public class MainActivity extends AppCompatActivity {
                     startActivity(Intent.createChooser(emailIntent, "Contact Developer"));
                     return true;
                 }
-                // Block malicious ad redirects / pop-under navigations
                 if (isAdBlockEnabled && classifyBlockedRequest(request.getUrl().getHost(), url) != 0) {
                     adsBlockedCount++;
                     return true;
@@ -1054,13 +1867,14 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageStarted(view, url, favicon);
                 injectNovaShieldHook(view);
                 if (view == getCurrentWebView()) {
-                    animateBarsVisibility(true);
                     if (url.startsWith("https://nova.browser")) {
                         etUrl.setText("");
+                        animateBarsToDp(56);
                     } else {
                         String lock = url.startsWith("https://") ? "🔒" : "⚠️";
                         etUrl.setText(url);
                         btnShield.setText(lock);
+                        animateBarsToDp(44);
                     }
                     progressBar.setVisibility(View.VISIBLE);
                 }
@@ -1131,7 +1945,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // PERMANENT MEDIASTORE PUBLIC DOWNLOADS + TURBO DOWNLOAD ENGINE
+    // MEDIASTORE PUBLIC DOWNLOADS + STACKED LIQUID GLASS TURBO DOWNLOAD MANAGER
     // =========================================================================
 
     private File getStagingDirectory() {
@@ -1150,7 +1964,6 @@ public class MainActivity extends AppCompatActivity {
         return "application/octet-stream";
     }
 
-    // Permanently saves completed download into public phone storage: Downloads/NOVA Browser/
     private String exportToPublicDownloads(File sourceFile, String fileName) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -1167,9 +1980,7 @@ public class MainActivity extends AppCompatActivity {
                         if (out != null) {
                             byte[] buf = new byte[65536];
                             int len;
-                            while ((len = in.read(buf)) != -1) {
-                                out.write(buf, 0, len);
-                            }
+                            while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
                             out.flush();
                         }
                     }
@@ -1187,16 +1998,13 @@ public class MainActivity extends AppCompatActivity {
                      OutputStream out = new FileOutputStream(dest)) {
                     byte[] buf = new byte[65536];
                     int len;
-                    while ((len = in.read(buf)) != -1) {
-                        out.write(buf, 0, len);
-                    }
+                    while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
                 }
                 MediaScannerConnection.scanFile(this, new String[]{dest.getAbsolutePath()}, null, null);
                 sourceFile.delete();
                 return "Downloads/NOVA Browser/" + fileName;
             }
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         return sourceFile.getAbsolutePath();
     }
 
@@ -1225,8 +2033,8 @@ public class MainActivity extends AppCompatActivity {
 
         TextView tvSec = new TextView(this);
         tvSec.setText(isHttps
-                ? "🔒 Verified HTTPS Stream → Saves to Downloads/NOVA Browser"
-                : "⚠️ Unencrypted HTTP Stream → Saves to Downloads/NOVA Browser");
+                ? "🔒 Verified HTTPS → Downloads/NOVA Browser"
+                : "⚠️ HTTP Stream → Downloads/NOVA Browser");
         tvSec.setTextColor(Color.parseColor(isHttps ? "#4ADE80" : "#FACC15"));
         tvSec.setTextSize(12f);
         tvSec.setPadding(0, dp(8), 0, dp(4));
@@ -1254,8 +2062,7 @@ public class MainActivity extends AppCompatActivity {
         card.addView(etName);
 
         Button btnStart = createLargeGlassButton("🚀 Start Turbo Download", "#0284C7", "#4F46E5", "#FFFFFF");
-        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
         startLp.setMargins(0, dp(14), 0, dp(8));
         btnStart.setOnClickListener(v -> {
             String finalName = etName.getText().toString().trim();
@@ -1291,16 +2098,13 @@ public class MainActivity extends AppCompatActivity {
         secondaryRow.addView(btnSys, sysLp);
 
         Button btnClose = createLargeGlassButton("Cancel", "#33EF4444", "#1AEF4444", "#FCA5A5");
-        LinearLayout.LayoutParams clsLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
         btnClose.setOnClickListener(v -> dialog.dismiss());
-        secondaryRow.addView(btnClose, clsLp);
-
+        secondaryRow.addView(btnClose, new LinearLayout.LayoutParams(0, dp(42), 1f));
         card.addView(secondaryRow);
 
         FrameLayout wrap = new FrameLayout(this);
         wrap.setPadding(dp(14), dp(14), dp(14), dp(14));
         wrap.addView(card);
-
         dialog.setContentView(wrap);
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1365,11 +2169,8 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 raf = new RandomAccessFile(target, "rw");
-                if (isPartial && existingBytes > 0) {
-                    raf.seek(existingBytes);
-                } else {
-                    raf.setLength(0);
-                }
+                if (isPartial && existingBytes > 0) raf.seek(existingBytes);
+                else raf.setLength(0);
 
                 in = new BufferedInputStream(conn.getInputStream(), 65536);
                 byte[] buffer = new byte[65536];
@@ -1410,7 +2211,6 @@ public class MainActivity extends AppCompatActivity {
                 in.close();
                 in = null;
 
-                // Permanently export into public Downloads/NOVA Browser/ via MediaStore
                 task.savedDisplayPath = exportToPublicDownloads(target, task.fileName);
                 task.speedBytesPerSec = 0;
                 task.status = TurboDownloadTask.STATUS_COMPLETED;
@@ -1509,7 +2309,6 @@ public class MainActivity extends AppCompatActivity {
         stackContainer.setOrientation(LinearLayout.VERTICAL);
         scrollRoot.addView(stackContainer);
 
-        // STACK CARD 1: Engine Telemetry
         LinearLayout statsCard = createGlassCard();
         long freeSpaceMb = getStagingDirectory().getFreeSpace() / (1024 * 1024);
         TextView tvEngine = new TextView(this);
@@ -1519,7 +2318,6 @@ public class MainActivity extends AppCompatActivity {
         statsCard.addView(tvEngine);
         stackContainer.addView(statsCard);
 
-        // STACK CARD 2: Direct Link Paste & Download
         LinearLayout linkCard = createGlassCard();
         TextView tvLinkTitle = new TextView(this);
         tvLinkTitle.setText("🔗 Direct Link Paste & Download");
@@ -1554,9 +2352,7 @@ public class MainActivity extends AppCompatActivity {
         linkBtnRow.addView(btnPaste, pasteLp);
 
         Button btnDirectGo = createLargeGlassButton("⚡ Download", "#0284C7", "#4F46E5", "#FFFFFF");
-        LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
-        linkBtnRow.addView(btnDirectGo, goLp);
-
+        linkBtnRow.addView(btnDirectGo, new LinearLayout.LayoutParams(0, dp(42), 1f));
         linkCard.addView(linkBtnRow);
         stackContainer.addView(linkCard);
 
@@ -1573,7 +2369,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // STACK CARD 3: Active & Recent Stacked Download Queue
         LinearLayout queueSectionHeader = new LinearLayout(this);
         queueSectionHeader.setOrientation(LinearLayout.HORIZONTAL);
         queueSectionHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -1594,7 +2389,6 @@ public class MainActivity extends AppCompatActivity {
         queueListLayout.setOrientation(LinearLayout.VERTICAL);
         stackContainer.addView(queueListLayout);
 
-        // STACK CARD 4: Clean 2-Row Stacked Category File Browser
         LinearLayout catCard = createGlassCard();
         TextView tvCatHeader = new TextView(this);
         tvCatHeader.setText("📂 Saved Downloads (Phone Downloads Folder)");
@@ -1633,13 +2427,10 @@ public class MainActivity extends AppCompatActivity {
         }
         stackContainer.addView(catCard);
 
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        outerGlass.addView(scrollRoot, scrollLp);
+        outerGlass.addView(scrollRoot, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         Button btnBgKeep = createLargeGlassButton("⬇ Minimize (Keep Downloads Running)", "#3338BDF8", "#1A6366F1", "#7DD3FC");
-        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
+        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
         footLp.setMargins(0, dp(8), 0, 0);
         btnBgKeep.setOnClickListener(v -> dialog.dismiss());
         outerGlass.addView(btnBgKeep, footLp);
@@ -1821,7 +2612,6 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    // Queries MediaStore.Downloads (Android 10+) + Legacy Downloads so every saved file is visible
     private void showFilteredFiles(String title, String[] extensions) {
         List<String> labels = new ArrayList<>();
         List<Uri> uris = new ArrayList<>();
@@ -1907,7 +2697,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // NAVIGATION, PRIVACY DASHBOARD & BROWSER TOOLS
+    // NAVIGATION, DEVELOPER PAGE & BROWSER TOOLS
     // =========================================================================
 
     private void loadUserInput(String input) {
@@ -1927,47 +2717,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             wv.loadUrl(searchEngineUrl + Uri.encode(input));
         }
-    }
-
-    private void showPrivacyDashboard() {
-        WebView wv = getCurrentWebView();
-        String currentUrl = (wv != null && wv.getUrl() != null) ? wv.getUrl() : "nova://home";
-        String host = Uri.parse(currentUrl).getHost();
-        boolean isHttps = currentUrl.startsWith("https://");
-        int total = adsBlockedCount + trackersBlockedCount;
-        String saved = String.format(Locale.US, "%.2f MB", (total * 18.5) / 1024.0);
-        int rulesLoaded = blockedAdHosts.size() + blockedTrackerHosts.size();
-
-        String report = "🛡️ NOVA Shield v4: " + (isAdBlockEnabled ? "ACTIVE (95%+ Engine)" : "PAUSED") + "\n"
-                + "📋 Active Blocklist Rules: " + rulesLoaded + " domains\n"
-                + "▶️ YouTube & 🎵 Spotify Ad-Shield: ACTIVE\n"
-                + "🔒 Connection: " + (isHttps ? "Secure (HTTPS)" : "Unencrypted / Local") + "\n"
-                + "🚫 Ads Blocked: " + adsBlockedCount + "\n"
-                + "👁️ Trackers Blocked: " + trackersBlockedCount + "\n"
-                + "📦 Total Blocked Requests: " + total + "\n"
-                + "⚡ Estimated Data Saved: " + saved + "\n"
-                + "🔋 Battery Saver: " + (isBatterySaver ? "ON" : "OFF");
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("NOVA Shield v4 Privacy Dashboard");
-        builder.setMessage(report);
-        builder.setPositiveButton(isAdBlockEnabled ? "Pause Shield" : "Enable Shield", (d, w) -> {
-            isAdBlockEnabled = !isAdBlockEnabled;
-            prefs.edit().putBoolean("adblock_enabled", isAdBlockEnabled).apply();
-            Toast.makeText(this, "NOVA Shield " + (isAdBlockEnabled ? "Enabled" : "Paused"), Toast.LENGTH_SHORT).show();
-            if (wv != null) wv.reload();
-        });
-        if (host != null && !host.contains("nova.browser")) {
-            boolean allowlisted = allowlistDomains.contains(host);
-            builder.setNeutralButton(allowlisted ? "Remove Allowlist" : "Trust This Site", (d, w) -> {
-                if (allowlisted) allowlistDomains.remove(host);
-                else allowlistDomains.add(host);
-                prefs.edit().putStringSet("allowlist", allowlistDomains).apply();
-                if (wv != null) wv.reload();
-            });
-        }
-        builder.setNegativeButton("Close", null);
-        builder.show();
     }
 
     private void showPerformanceOptimizerDialog() {
@@ -1990,9 +2739,7 @@ public class MainActivity extends AppCompatActivity {
                 for (int i = 0; i < tabs.size(); i++) {
                     WebView tab = tabs.get(i);
                     tab.clearCache(false);
-                    if (i != currentTabIndex) {
-                        tab.onPause();
-                    }
+                    if (i != currentTabIndex) tab.onPause();
                 }
                 System.gc();
                 long after = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
@@ -2008,28 +2755,80 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
+    // Dedicated Liquid Glass Developer & Contact Page (removed from homepage)
     private void showAboutDeveloperDialog() {
-        String aboutMessage = "🌐 NOVA Browser — Liquid Glass Edition\n"
-                + "Version: 3.1.0 (Shield v4 + MediaStore Turbo Downloads)\n\n"
-                + "👨‍💻 Developer: " + DEV_NAME + "\n"
-                + "📧 Email: " + DEV_EMAIL + "\n"
-                + "💻 GitHub: @shahalamlaskarofficial\n\n"
-                + "Built for ultra-fast browsing, 95%+ ad & tracker protection, persistent MediaStore downloads, and low battery usage.";
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        new AlertDialog.Builder(this)
-            .setTitle("About & Contact Developer")
-            .setMessage(aboutMessage)
-            .setPositiveButton("📧 Email Developer", (d, w) -> {
-                Intent email = new Intent(Intent.ACTION_SENDTO);
-                email.setData(Uri.parse("mailto:" + DEV_EMAIL + "?subject=" + Uri.encode("NOVA Browser Feedback")));
-                startActivity(Intent.createChooser(email, "Email " + DEV_NAME));
-            })
-            .setNeutralButton("💻 GitHub", (d, w) -> {
-                WebView wv = getCurrentWebView();
-                if (wv != null) wv.loadUrl(DEV_GITHUB);
-            })
-            .setNegativeButton("Close", null)
-            .show();
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(makeGlassDrawable(
+                Color.parseColor("#F20A1428"),
+                Color.parseColor("#F2050B18"),
+                Color.parseColor("#6638BDF8"),
+                26, 1));
+        outer.setPadding(dp(20), dp(20), dp(20), dp(20));
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("👨‍💻 About & Contact Developer");
+        tvTitle.setTextColor(Color.parseColor("#F8FAFC"));
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextSize(18f);
+        outer.addView(tvTitle);
+
+        LinearLayout card = createGlassCard();
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cLp.setMargins(0, dp(12), 0, dp(12));
+
+        TextView tvInfo = new TextView(this);
+        tvInfo.setText("🌐 NOVA Browser v3.2 — Liquid Glass Edition\n\n"
+                + "Developer: " + DEV_NAME + "\n"
+                + "Email: " + DEV_EMAIL + "\n"
+                + "GitHub: @shahalamlaskarofficial\n\n"
+                + "Features: NOVA Shield v5 (180k+ Rules + Interstitial Killer), Turbo MediaStore Downloader, Built-In Temp Mail, Login Wall Bypass, AMOLED & Custom Wallpapers.");
+        tvInfo.setTextColor(Color.parseColor("#CBD5E1"));
+        tvInfo.setTextSize(13f);
+        card.addView(tvInfo);
+        outer.addView(card, cLp);
+
+        Button btnEmail = createLargeGlassButton("📧 Email Developer", "#0284C7", "#4F46E5", "#FFFFFF");
+        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
+        bLp.setMargins(0, 0, 0, dp(8));
+        btnEmail.setOnClickListener(v -> {
+            Intent email = new Intent(Intent.ACTION_SENDTO);
+            email.setData(Uri.parse("mailto:" + DEV_EMAIL + "?subject=" + Uri.encode("NOVA Browser Feedback")));
+            startActivity(Intent.createChooser(email, "Email " + DEV_NAME));
+        });
+        outer.addView(btnEmail, bLp);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnGit = createLargeGlassButton("💻 GitHub Profile", "#33FFFFFF", "#1AFFFFFF", "#F8FAFC");
+        LinearLayout.LayoutParams gLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        gLp.setMargins(0, 0, dp(8), 0);
+        btnGit.setOnClickListener(v -> {
+            WebView wv = getCurrentWebView();
+            if (wv != null) wv.loadUrl(DEV_GITHUB);
+            dialog.dismiss();
+        });
+        row.addView(btnGit, gLp);
+
+        Button btnClose = createLargeGlassButton("Close", "#33EF4444", "#1AEF4444", "#FCA5A5");
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        row.addView(btnClose, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        outer.addView(row);
+
+        FrameLayout wrap = new FrameLayout(this);
+        wrap.setPadding(dp(14), dp(16), dp(14), dp(16));
+        wrap.addView(outer);
+        dialog.setContentView(wrap);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setDimAmount(0.72f);
+        }
+        dialog.show();
     }
 
     private void showTabSwitcher() {
@@ -2045,12 +2844,8 @@ public class MainActivity extends AppCompatActivity {
         }
         tabTitles.add("➕ Open New Tab");
         tabTitles.add("🕵️ Toggle Private Mode (" + (isIncognito ? "ON" : "OFF") + ")");
-        if (!closedTabs.isEmpty()) {
-            tabTitles.add("↩️ Reopen Closed Tab");
-        }
-        if (tabs.size() > 1) {
-            tabTitles.add("🗑️ Close Current Tab");
-        }
+        if (!closedTabs.isEmpty()) tabTitles.add("↩️ Reopen Closed Tab");
+        if (tabs.size() > 1) tabTitles.add("🗑️ Close Current Tab");
 
         new AlertDialog.Builder(this)
             .setTitle("Visual Tab Switcher (" + tabs.size() + " Open | 💤 = Suspended)")
@@ -2059,16 +2854,10 @@ public class MainActivity extends AppCompatActivity {
                     switchToTab(which);
                 } else {
                     String action = tabTitles.get(which);
-                    if (action.startsWith("➕")) {
-                        createNewTab("nova://home");
-                    } else if (action.startsWith("🕵️")) {
-                        toggleIncognitoMode();
-                    } else if (action.startsWith("↩️")) {
-                        String reopenUrl = closedTabs.remove(0);
-                        createNewTab(reopenUrl);
-                    } else if (action.startsWith("🗑️")) {
-                        closeTab(currentTabIndex);
-                    }
+                    if (action.startsWith("➕")) createNewTab("nova://home");
+                    else if (action.startsWith("🕵️")) toggleIncognitoMode();
+                    else if (action.startsWith("↩️")) createNewTab(closedTabs.remove(0));
+                    else if (action.startsWith("🗑️")) closeTab(currentTabIndex);
                 }
             })
             .show();
@@ -2076,15 +2865,18 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMainMenu() {
         String[] options = {
+            "🛡️ NOVA Shield v5 (AdBlocker Menu)",
             "⬇ NOVA Turbo Download Manager",
+            "📧 NOVA Temp Mail (Disposable Email)",
+            "🔓 Bypass Login / Sign-Up Wall",
+            "🎨 Customize Home, AMOLED & Wallpapers",
             "⚡ RAM & Battery Optimizer (" + getRamUsageMb() + ")",
             "🔍 Search Engine (" + searchEngineName + ")",
             "📖 Reader Mode (Distraction-Free)",
             "🔎 Find in Page",
-            "🖥️ Desktop Site (" + (isDesktopMode ? "ON" : "OFF") + ") — Needed for Spotify Web",
+            "🖥️ Desktop Site (" + (isDesktopMode ? "ON" : "OFF") + ") — Spotify Web",
             "🕵️ Private Browsing (" + (isIncognito ? "ON" : "OFF") + ")",
             "📉 Data Saver / Block Images (" + (isDataSaver ? "ON" : "OFF") + ")",
-            "🌗 Liquid Glass Theme: " + (isDarkTheme ? "Dark Glass" : "Light Glass"),
             "🔠 Font / Zoom Size (" + textZoomPercent + "%)",
             "📺 Full-Screen Mode (" + (isFullScreen ? "ON" : "OFF") + ")",
             "🌐 Translate Current Page",
@@ -2095,38 +2887,41 @@ public class MainActivity extends AppCompatActivity {
         };
 
         new AlertDialog.Builder(this)
-            .setTitle("NOVA Browser v3.1 Menu")
+            .setTitle("NOVA Browser v3.2 Menu")
             .setItems(options, (d, which) -> {
                 WebView wv = getCurrentWebView();
                 switch (which) {
-                    case 0: showTurboDownloadManager(); break;
-                    case 1: showPerformanceOptimizerDialog(); break;
-                    case 2: showSearchEngineDialog(); break;
-                    case 3: toggleReaderMode(wv); break;
-                    case 4:
+                    case 0: showOrganizedShieldDashboard(); break;
+                    case 1: showTurboDownloadManager(); break;
+                    case 2: showTempMailDialog(); break;
+                    case 3: showLoginBypassDialog(wv); break;
+                    case 4: showCustomizeThemeDialog(); break;
+                    case 5: showPerformanceOptimizerDialog(); break;
+                    case 6: showSearchEngineDialog(); break;
+                    case 7: toggleReaderMode(wv); break;
+                    case 8:
                         layoutFind.setVisibility(View.VISIBLE);
                         etFind.requestFocus();
                         break;
-                    case 5: toggleDesktopMode(); break;
-                    case 6: toggleIncognitoMode(); break;
-                    case 7:
+                    case 9: toggleDesktopMode(); break;
+                    case 10: toggleIncognitoMode(); break;
+                    case 11:
                         isDataSaver = !isDataSaver;
                         for (WebView tab : tabs) tab.getSettings().setBlockNetworkImage(isDataSaver);
                         if (wv != null) wv.reload();
                         Toast.makeText(this, "Data Saver " + (isDataSaver ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
                         break;
-                    case 8: toggleTheme(); break;
-                    case 9: showZoomDialog(); break;
-                    case 10: toggleFullScreen(); break;
-                    case 11:
+                    case 12: showZoomDialog(); break;
+                    case 13: toggleFullScreen(); break;
+                    case 14:
                         if (wv != null && wv.getUrl() != null && !wv.getUrl().startsWith("https://nova.browser")) {
                             wv.loadUrl("https://translate.google.com/translate?sl=auto&tl=en&u=" + Uri.encode(wv.getUrl()));
                         }
                         break;
-                    case 12: showHistoryDialog(); break;
-                    case 13: shareOrCopyUrl(wv); break;
-                    case 14: clearBrowserData(wv); break;
-                    case 15: showAboutDeveloperDialog(); break;
+                    case 15: showHistoryDialog(); break;
+                    case 16: shareOrCopyUrl(wv); break;
+                    case 17: clearBrowserData(wv); break;
+                    case 18: showAboutDeveloperDialog(); break;
                 }
             })
             .show();
@@ -2184,9 +2979,7 @@ public class MainActivity extends AppCompatActivity {
         String ua = isDesktopMode
             ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
             : defaultUserAgent;
-        for (WebView tab : tabs) {
-            tab.getSettings().setUserAgentString(ua);
-        }
+        for (WebView tab : tabs) tab.getSettings().setUserAgentString(ua);
         WebView wv = getCurrentWebView();
         if (wv != null) wv.reload();
         Toast.makeText(this, "Desktop Mode " + (isDesktopMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
@@ -2201,15 +2994,6 @@ public class MainActivity extends AppCompatActivity {
         }
         applyLiquidGlassTheme();
         Toast.makeText(this, "Private Browsing " + (isIncognito ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
-    }
-
-    private void toggleTheme() {
-        isDarkTheme = !isDarkTheme;
-        applyLiquidGlassTheme();
-        WebView wv = getCurrentWebView();
-        if (wv != null && (wv.getUrl() == null || wv.getUrl().startsWith("https://nova.browser"))) {
-            loadNovaHome(wv);
-        }
     }
 
     private void showZoomDialog() {
@@ -2232,7 +3016,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             bottomBar.setVisibility(View.VISIBLE);
-            animateBarsVisibility(true);
+            animateBarsToDp(44);
         }
     }
 
