@@ -22,6 +22,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Persist Consistent Signing Keystore (Enables In-Place Updates)
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nova-browser-persistent-keystore-v1
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -31,18 +37,18 @@ jobs:
       - name: Build Debug APK
         run: |
           gradle assembleDebug --refresh-dependencies
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NOVA-Browser-v3.2.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NOVA-Browser-v4.0.apk
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Nova-Browser-Debug-APK
-          path: app/build/outputs/apk/debug/NOVA-Browser-v3.2.apk
+          path: app/build/outputs/apk/debug/NOVA-Browser-v4.0.apk
 
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.2.${{ github.run_number }}
-          name: "NOVA Browser v3.2 (Build #${{ github.run_number }})"
-          body: "Automated build of NOVA Browser v3.2 by Shah Alam Laskar. Tap NOVA-Browser-v3.2.apk below under Assets to download."
-          files: app/build/outputs/apk/debug/NOVA-Browser-v3.2.apk
+          tag_name: v4.0.${{ github.run_number }}
+          name: "NOVA Browser v4.0 (Build #${{ github.run_number }})"
+          body: "NOVA Browser v4.0 by Shah Alam Laskar — Regular Updates Enabled! Tap NOVA-Browser-v4.0.apk below under Assets to download."
+          files: app/build/outputs/apk/debug/NOVA-Browser-v4.0.apk
